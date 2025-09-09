@@ -71,3 +71,12 @@ htmlcov/
 # Temporary files
 *.tmp
 *.temp
+
+# Markdown files
+API_REFERENCE.md
+DEPLOYMENT.md
+PROJECT_STRUCTURE.md
+
+# Bash files
+deploy.sh
+setup_ollama.sh
