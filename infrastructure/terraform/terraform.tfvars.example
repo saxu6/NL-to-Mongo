@@ -1,0 +1,41 @@
+# Example Terraform variables file
+# Copy this to terraform.tfvars and fill in your values
+
+# AWS Configuration
+aws_region = "us-west-2"
+environment = "dev"
+
+# Project Configuration
+project_name = "mongodb-query-translator"
+
+# Network Configuration
+vpc_cidr = "10.0.0.0/16"
+private_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+public_subnet_cidrs = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+
+# Kubernetes Configuration
+kubernetes_version = "1.28"
+node_instance_types = ["t3.medium", "t3.large"]
+node_group_min_size = 1
+node_group_max_size = 10
+node_group_desired_size = 3
+
+# Database Configuration
+rds_instance_class = "db.t3.micro"
+mlflow_db_password = "your-secure-password-here"
+
+# Redis Configuration
+redis_node_type = "cache.t3.micro"
+
+# MongoDB Atlas Configuration (optional)
+mongodb_atlas_project_id = "your-atlas-project-id"
+mongodb_atlas_public_key = "your-atlas-public-key"
+mongodb_atlas_private_key = "your-atlas-private-key"
+
+# Monitoring Configuration
+enable_monitoring = true
+log_retention_days = 30
+
+# Cost Optimization
+enable_spot_instances = false
+auto_scaling_enabled = true

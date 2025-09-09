@@ -1,0 +1,223 @@
+# Apache Airflow for Data Orchestration
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-webserver
+  namespace: airflow
+  labels:
+    app: airflow-webserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-webserver
+  template:
+    metadata:
+      labels:
+        app: airflow-webserver
+    spec:
+      containers:
+      - name: airflow-webserver
+        image: apache/airflow:2.7.1-python3.9
+        ports:
+        - containerPort: 8080
+        env:
+        - name: AIRFLOW__CORE__EXECUTOR
+          value: "KubernetesExecutor"
+        - name: AIRFLOW__CORE__DAGS_FOLDER
+          value: "/opt/airflow/dags"
+        - name: AIRFLOW__CORE__PLUGINS_FOLDER
+          value: "/opt/airflow/plugins"
+        - name: AIRFLOW__CORE__SQL_ALCHEMY_CONN
+          value: "postgresql://airflow:$(AIRFLOW_DB_PASSWORD)@$(AIRFLOW_DB_HOST):5432/airflow"
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: fernet-key
+        - name: AIRFLOW__CORE__LOAD_EXAMPLES
+          value: "False"
+        - name: AIRFLOW__WEBSERVER__SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: webserver-secret-key
+        - name: AIRFLOW__KUBERNETES__NAMESPACE
+          value: "airflow"
+        - name: AIRFLOW__KUBERNETES__WORKER_CONTAINER_REPOSITORY
+          value: "apache/airflow:2.7.1-python3.9"
+        - name: AIRFLOW__KUBERNETES__WORKER_CONTAINER_TAG
+          value: "latest"
+        - name: AIRFLOW_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: db-password
+        - name: AIRFLOW_DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: airflow-config
+              key: db-host
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: airflow-config
+              key: redis-host
+        - name: REDIS_PORT
+          value: "6379"
+        command: ["airflow", "webserver"]
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      volumes:
+      - name: airflow-dags
+        configMap:
+          name: airflow-dags
+      - name: airflow-logs
+        emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-scheduler
+  namespace: airflow
+  labels:
+    app: airflow-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-scheduler
+  template:
+    metadata:
+      labels:
+        app: airflow-scheduler
+    spec:
+      containers:
+      - name: airflow-scheduler
+        image: apache/airflow:2.7.1-python3.9
+        env:
+        - name: AIRFLOW__CORE__EXECUTOR
+          value: "KubernetesExecutor"
+        - name: AIRFLOW__CORE__DAGS_FOLDER
+          value: "/opt/airflow/dags"
+        - name: AIRFLOW__CORE__PLUGINS_FOLDER
+          value: "/opt/airflow/plugins"
+        - name: AIRFLOW__CORE__SQL_ALCHEMY_CONN
+          value: "postgresql://airflow:$(AIRFLOW_DB_PASSWORD)@$(AIRFLOW_DB_HOST):5432/airflow"
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: fernet-key
+        - name: AIRFLOW__CORE__LOAD_EXAMPLES
+          value: "False"
+        - name: AIRFLOW__KUBERNETES__NAMESPACE
+          value: "airflow"
+        - name: AIRFLOW__KUBERNETES__WORKER_CONTAINER_REPOSITORY
+          value: "apache/airflow:2.7.1-python3.9"
+        - name: AIRFLOW__KUBERNETES__WORKER_CONTAINER_TAG
+          value: "latest"
+        - name: AIRFLOW_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: db-password
+        - name: AIRFLOW_DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: airflow-config
+              key: db-host
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: airflow-config
+              key: redis-host
+        - name: REDIS_PORT
+          value: "6379"
+        command: ["airflow", "scheduler"]
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+      volumes:
+      - name: airflow-dags
+        configMap:
+          name: airflow-dags
+      - name: airflow-logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-webserver
+  namespace: airflow
+  labels:
+    app: airflow-webserver
+spec:
+  selector:
+    app: airflow-webserver
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airflow-config
+  namespace: airflow
+data:
+  db-host: "airflow-db.cluster-xyz.us-west-2.rds.amazonaws.com"
+  redis-host: "mongodb-query-translator-dev-airflow-cache.xyz.cache.amazonaws.com"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: airflow-secrets
+  namespace: airflow
+type: Opaque
+data:
+  # Base64 encoded values - replace with actual values
+  db-password: bXlzZWN1cmVwYXNzd29yZA==  # mysecurepassword
+  fernet-key: eW91ci1mZXJuZXQta2V5LWhlcmU=  # your-fernet-key-here
+  webserver-secret-key: eW91ci13ZWJzZXJ2ZXItc2VjcmV0LWtleQ==  # your-webserver-secret-key
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airflow-dags
+  namespace: airflow
+data:
+  # DAG files will be mounted here
+  __init__.py: ""
