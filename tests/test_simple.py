@@ -15,36 +15,36 @@ def test_database_connection():
     try:
         db = get_database()
         collections = db.list_collection_names()
-        print(f"✅ Database connected: {db.name}")
-        print(f"📊 Collections: {collections}")
+        print(f"SUCCESS: Database connected: {db.name}")
+        print(f"Collections: {collections}")
         return True
     except Exception as e:
-        print(f"❌ Database connection failed: {e}")
+        print(f"ERROR: Database connection failed: {e}")
         return False
 
 def test_query_generator():
     """Test query generator."""
     try:
         generator = QueryGenerator()
-        print("✅ Query generator initialized")
+        print("SUCCESS: Query generator initialized")
         return True
     except Exception as e:
-        print(f"❌ Query generator failed: {e}")
+        print(f"ERROR: Query generator failed: {e}")
         return False
 
 def test_validation_engine():
     """Test validation engine."""
     try:
         validator = ValidationEngine()
-        print("✅ Validation engine initialized")
+        print("SUCCESS: Validation engine initialized")
         return True
     except Exception as e:
-        print(f"❌ Validation engine failed: {e}")
+        print(f"ERROR: Validation engine failed: {e}")
         return False
 
 def main():
     """Run all tests."""
-    print("🧪 Running simple tests...")
+    print("Running simple tests...")
     print("-" * 40)
     
     tests = [
@@ -59,13 +59,13 @@ def main():
             passed += 1
         print()
     
-    print(f"📊 Results: {passed}/{len(tests)} tests passed")
+    print(f"Results: {passed}/{len(tests)} tests passed")
     
     if passed == len(tests):
-        print("🎉 All tests passed!")
+        print("All tests passed!")
         return 0
     else:
-        print("❌ Some tests failed!")
+        print("Some tests failed!")
         return 1
 
 if __name__ == "__main__":
