@@ -1,0 +1,795 @@
+{
+    "cycle_events": {
+        "events": {
+            "count": 20,
+            "object": {
+                "_id": {
+                    "types_count": {
+                        "string": 20
+                    },
+                    "count": 20,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "camera_id": {
+                    "types_count": {
+                        "string": 20
+                    },
+                    "count": 20,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "up_event_start": {
+                    "types_count": {
+                        "float": 20
+                    },
+                    "count": 20,
+                    "type": "float",
+                    "prop_in_object": 1.0
+                },
+                "up_event_end": {
+                    "types_count": {
+                        "null": 2,
+                        "float": 18
+                    },
+                    "count": 20,
+                    "type": "float",
+                    "prop_in_object": 1.0
+                },
+                "up_event_duration": {
+                    "types_count": {
+                        "float": 20
+                    },
+                    "count": 20,
+                    "type": "float",
+                    "prop_in_object": 1.0
+                },
+                "initial_idle_time": {
+                    "types_count": {
+                        "float": 17,
+                        "null": 3
+                    },
+                    "count": 20,
+                    "type": "float",
+                    "prop_in_object": 1.0
+                },
+                "avg_total_manpower": {
+                    "types_count": {
+                        "float": 20
+                    },
+                    "count": 20,
+                    "type": "float",
+                    "prop_in_object": 1.0
+                },
+                "intermediate_idle_time": {
+                    "types_count": {
+                        "ARRAY": 20
+                    },
+                    "count": 20,
+                    "array_types_count": {
+                        "ARRAY": 40,
+                        "null": 11
+                    },
+                    "type": "ARRAY",
+                    "array_type": "null",
+                    "prop_in_object": 1.0
+                },
+                "loading_unloading_status": {
+                    "types_count": {
+                        "string": 20
+                    },
+                    "count": 20,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "client_id": {
+                    "types_count": {
+                        "string": 20
+                    },
+                    "count": 20,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "local_site_id": {
+                    "types_count": {
+                        "string": 20
+                    },
+                    "count": 20,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "up_event_table": {
+                    "types_count": {
+                        "string": 20
+                    },
+                    "count": 20,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "table_name": {
+                    "types_count": {
+                        "string": 20
+                    },
+                    "count": 20,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "_embedding": {
+                    "types_count": {
+                        "ARRAY": 20
+                    },
+                    "count": 20,
+                    "array_types_count": {
+                        "float": 7680
+                    },
+                    "type": "ARRAY",
+                    "array_type": "float",
+                    "prop_in_object": 1.0
+                },
+                "_text_combined": {
+                    "types_count": {
+                        "string": 20
+                    },
+                    "count": 20,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                }
+            }
+        }
+    },
+    "dock_data": {
+        "docks": {
+            "count": 6,
+            "object": {
+                "_id": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "dock_id": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "name": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "client_id": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "video_time_start": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "video_time_end": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "description": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "camera_ip": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "camera_url": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "camera_name": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "camera_password": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "trackers_cb_data": {
+                    "types_count": {
+                        "OBJECT": 6
+                    },
+                    "count": 6,
+                    "object": {
+                        "max_age": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "min_hits": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "iou_threshold": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        }
+                    },
+                    "type": "OBJECT",
+                    "prop_in_object": 1.0
+                },
+                "trackers_pers_data": {
+                    "types_count": {
+                        "OBJECT": 6
+                    },
+                    "count": 6,
+                    "object": {
+                        "max_age": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "min_hits": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "iou_threshold": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        }
+                    },
+                    "type": "OBJECT",
+                    "prop_in_object": 1.0
+                },
+                "truck_detect_aoi": {
+                    "types_count": {
+                        "OBJECT": 6
+                    },
+                    "count": 6,
+                    "object": {
+                        "x1": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "y1": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "x2": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "y2": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        }
+                    },
+                    "type": "OBJECT",
+                    "prop_in_object": 1.0
+                },
+                "image_width": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "image_height": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "local_site_id": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "status": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "video_input_type": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "url_input": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "video_output_type": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "url_output": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "perspective_mapping": {
+                    "types_count": {
+                        "OBJECT": 6
+                    },
+                    "count": 6,
+                    "object": {
+                        "top_left_x": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "top_left_y": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "top_right_x": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "top_right_y": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "bottom_left_x": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "bottom_left_y": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "bottom_right_x": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "bottom_right_y": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "width": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        },
+                        "height": {
+                            "types_count": {
+                                "null": 6
+                            },
+                            "count": 6,
+                            "type": "null",
+                            "prop_in_object": 1.0
+                        }
+                    },
+                    "type": "OBJECT",
+                    "prop_in_object": 1.0
+                },
+                "bounding_polygon_list": {
+                    "types_count": {
+                        "ARRAY": 6
+                    },
+                    "count": 6,
+                    "array_types_count": {
+                        "OBJECT": 5,
+                        "null": 1
+                    },
+                    "object": {
+                        "manpower_activity_area": {
+                            "types_count": {
+                                "OBJECT": 5
+                            },
+                            "count": 5,
+                            "object": {
+                                "points": {
+                                    "types_count": {
+                                        "ARRAY": 5
+                                    },
+                                    "count": 5,
+                                    "array_types_count": {
+                                        "OBJECT": 20
+                                    },
+                                    "object": {
+                                        "x": {
+                                            "types_count": {
+                                                "integer": 20
+                                            },
+                                            "count": 20,
+                                            "type": "integer",
+                                            "prop_in_object": 4.0
+                                        },
+                                        "y": {
+                                            "types_count": {
+                                                "integer": 20
+                                            },
+                                            "count": 20,
+                                            "type": "integer",
+                                            "prop_in_object": 4.0
+                                        }
+                                    },
+                                    "type": "ARRAY",
+                                    "array_type": "OBJECT",
+                                    "prop_in_object": 1.0
+                                },
+                                "paddingLeft": {
+                                    "types_count": {
+                                        "integer": 5
+                                    },
+                                    "count": 5,
+                                    "type": "integer",
+                                    "prop_in_object": 1.0
+                                },
+                                "paddingTop": {
+                                    "types_count": {
+                                        "integer": 5
+                                    },
+                                    "count": 5,
+                                    "type": "integer",
+                                    "prop_in_object": 1.0
+                                },
+                                "width": {
+                                    "types_count": {
+                                        "integer": 5
+                                    },
+                                    "count": 5,
+                                    "type": "integer",
+                                    "prop_in_object": 1.0
+                                },
+                                "height": {
+                                    "types_count": {
+                                        "integer": 5
+                                    },
+                                    "count": 5,
+                                    "type": "integer",
+                                    "prop_in_object": 1.0
+                                }
+                            },
+                            "type": "OBJECT",
+                            "prop_in_object": 0.8333
+                        }
+                    },
+                    "type": "ARRAY",
+                    "array_type": "OBJECT",
+                    "prop_in_object": 1.0
+                },
+                "time_created": {
+                    "types_count": {
+                        "float": 6
+                    },
+                    "count": 6,
+                    "type": "float",
+                    "prop_in_object": 1.0
+                },
+                "_class": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "_embedding": {
+                    "types_count": {
+                        "ARRAY": 6
+                    },
+                    "count": 6,
+                    "array_types_count": {
+                        "float": 2304
+                    },
+                    "type": "ARRAY",
+                    "array_type": "float",
+                    "prop_in_object": 1.0
+                },
+                "_text_combined": {
+                    "types_count": {
+                        "string": 6
+                    },
+                    "count": 6,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "image_url": {
+                    "types_count": {
+                        "string": 1
+                    },
+                    "count": 1,
+                    "type": "string",
+                    "prop_in_object": 0.1667
+                },
+                "image_polygon_list": {
+                    "types_count": {
+                        "ARRAY": 1
+                    },
+                    "count": 1,
+                    "array_types_count": {
+                        "null": 1
+                    },
+                    "type": "ARRAY",
+                    "array_type": "null",
+                    "prop_in_object": 0.1667
+                },
+                "user_list": {
+                    "types_count": {
+                        "ARRAY": 1
+                    },
+                    "count": 1,
+                    "array_types_count": {
+                        "null": 1
+                    },
+                    "type": "ARRAY",
+                    "array_type": "null",
+                    "prop_in_object": 0.1667
+                }
+            }
+        }
+    },
+    "manpower_metrics": {
+        "metrics": {
+            "count": 5824,
+            "object": {
+                "_id": {
+                    "types_count": {
+                        "string": 5824
+                    },
+                    "count": 5824,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "window_start": {
+                    "types_count": {
+                        "float": 5824
+                    },
+                    "count": 5824,
+                    "type": "float",
+                    "prop_in_object": 1.0
+                },
+                "window_end": {
+                    "types_count": {
+                        "float": 5824
+                    },
+                    "count": 5824,
+                    "type": "float",
+                    "prop_in_object": 1.0
+                },
+                "frames_captured": {
+                    "types_count": {
+                        "integer": 5824
+                    },
+                    "count": 5824,
+                    "type": "integer",
+                    "prop_in_object": 1.0
+                },
+                "avg_manpower": {
+                    "types_count": {
+                        "float": 3370,
+                        "integer": 2454
+                    },
+                    "count": 5824,
+                    "type": "number",
+                    "prop_in_object": 1.0
+                },
+                "peak_manpower": {
+                    "types_count": {
+                        "integer": 5824
+                    },
+                    "count": 5824,
+                    "type": "integer",
+                    "prop_in_object": 1.0
+                },
+                "min_manpower": {
+                    "types_count": {
+                        "integer": 5824
+                    },
+                    "count": 5824,
+                    "type": "integer",
+                    "prop_in_object": 1.0
+                },
+                "manpower_seconds": {
+                    "types_count": {
+                        "integer": 5824
+                    },
+                    "count": 5824,
+                    "type": "integer",
+                    "prop_in_object": 1.0
+                },
+                "manpower_hours": {
+                    "types_count": {
+                        "float": 4673,
+                        "integer": 1151
+                    },
+                    "count": 5824,
+                    "type": "number",
+                    "prop_in_object": 1.0
+                },
+                "camera_id": {
+                    "types_count": {
+                        "string": 5824
+                    },
+                    "count": 5824,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "client_id": {
+                    "types_count": {
+                        "string": 5824
+                    },
+                    "count": 5824,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "local_site_id": {
+                    "types_count": {
+                        "string": 5824
+                    },
+                    "count": 5824,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "timestamp": {
+                    "types_count": {
+                        "float": 5824
+                    },
+                    "count": 5824,
+                    "type": "float",
+                    "prop_in_object": 1.0
+                },
+                "table_name": {
+                    "types_count": {
+                        "string": 5824
+                    },
+                    "count": 5824,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                },
+                "_embedding": {
+                    "types_count": {
+                        "ARRAY": 5824
+                    },
+                    "count": 5824,
+                    "array_types_count": {
+                        "float": 2236416
+                    },
+                    "type": "ARRAY",
+                    "array_type": "float",
+                    "prop_in_object": 1.0
+                },
+                "_text_combined": {
+                    "types_count": {
+                        "string": 5824
+                    },
+                    "count": 5824,
+                    "type": "string",
+                    "prop_in_object": 1.0
+                }
+            }
+        }
+    }
+}

@@ -1,15 +1,33 @@
 import ollama
 
-def list_and_test(model_name="llama3.1"):
-    print(f"M1.2: Testing capabilities with {model_name}...")
+def get_models():
     try:
-        # List models
-        models = ollama.list()['models']
-        print(f"Found {len(models)} local models.")
-        
-        # Test basic prompt
-        resp = ollama.generate(model=model_name, prompt="Say 'Ready for logic'")
-        print(f"Response: {resp['response']}")
+        request = ollama.list()
+        models = [m.model for m in request.models if "embed" not in m.model.lower()]
+        to_use = [m for m in models if float(m.split(':')[1].split('b')[0]) <= 14]
+        return to_use
+    except Exception as e:
+        print(f"Error: {e}")
+        return []
+
+def list_and_test():
+    try:
+        request = ollama.list()
+        models = [m.model for m in request.models if "embed" not in m.model.lower()]
+
+        if not models:
+            print("No models found.")
+            return
+
+        try:
+            to_use = [m for m in models if float(m.split(':')[1].split('b')[0]) <= 14]
+            for model in to_use:
+                print(model)
+                response = ollama.generate(model=model, prompt="Say 'Ready to Code'")
+                print(f"Response: {response['response'].strip()}\n")
+        except Exception as e:
+            print(f"Failed to run {model}: {e}\n")
+
     except Exception as e:
         print(f"Error: {e}")
 
