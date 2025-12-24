@@ -2,9 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from backend.routes import query
-from backend.database import connect_to_mongo, close_mongo_connection
-from backend.config import settings
+from routes import query
+from database import connect_to_mongo, close_mongo_connection
+from config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

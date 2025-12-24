@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from backend.models.schemas import QueryRequest, QueryResponse, SchemaResponse
-from backend.services.query_service import convert_nl_to_mongodb, get_schema
+from schemas import QueryRequest, QueryResponse, SchemaResponse
+from query_service import convert_nl_to_mongodb, get_schema
 
 router = APIRouter()
 
