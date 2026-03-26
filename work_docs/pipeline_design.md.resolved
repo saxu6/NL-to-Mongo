@@ -1,0 +1,210 @@
+# Updated Pipeline — With spaCy Preprocessor
+
+## Overview
+
+```
+"give me the list of products whose gross sale values are greater than 1000 in the past month"
+    │
+    ▼
+┌──────────────────┐
+│ 1. PREPROCESSOR  │  Prose → semi-structured text
+│    (spaCy NLP)   │
+└──────┬───────────┘
+       ▼
+┌──────────────────┐
+│ 2. PARSER        │  Semi-structured text → raw AST
+│    (Lark grammar)│
+└──────┬───────────┘
+       ▼
+┌──────────────────┐
+│ 3. RESOLVER      │  Raw AST + schema → resolved AST
+│    (SchemaContext)│
+└──────┬───────────┘
+       ▼
+┌──────────────────┐
+│ 4. COMPILER      │  Resolved AST → MongoDB dict
+└──────────────────┘
+```
+
+---
+
+## Stage 1: Preprocessor (`preprocessor.py`)
+
+**Input**: Raw prose string
+**Output**: Normalized semi-structured string the Lark grammar can parse
+
+### What it does (6 passes):
+
+| Pass | Input | Output | Technique |
+|---|---|---|---|
+| 1. Filler removal | `"give me the list of products whose..."` | `"products whose..."` | Stop-phrase list |
+| 2. Intent extraction | `"give me..."` (removed but captured) | `intent="find"` prefix | Verb lemma mapping |
+| 3. Temporal extraction | `"in the past month"` | `"after 2026-02-09"` | spaCy DATE entities + dateparser |
+| 4. Noun chunk joining | `"gross sale values"` | `"gross_sale_values"` | `doc.noun_chunks` → underscore join |
+| 5. Operator normalization | `"are greater than"` | `"greater than"` | Remove copulas (is/are/was) before operators |
+| 6. Assembly | all extracted parts | final normalized string | Template: `INTENT COLLECTION where FIELD OP VALUE TEMPORAL` |
+
+### Worked example
+
+```
+INPUT:  "give me the list of products whose gross sale values are greater than 1000 in the past month"
+
+Pass 1 (filler removal):
+  Remove: "give me", "the list of"
+  → "products whose gross sale values are greater than 1000 in the past month"
+
+Pass 2 (intent extraction):
+  "give" → verb lemma "give" → intent="find"
+  → intent="find", remaining="products whose gross sale values are greater than 1000 in the past month"
+
+Pass 3 (temporal extraction):
+  spaCy detects "the past month" as temporal → dateparser → "2026-02-09"
+  → temporal filter: "after 2026-02-09"
+  → remaining="products whose gross sale values are greater than 1000"
+
+Pass 4 (noun chunk joining):
+  spaCy noun_chunks: ["products", "gross sale values", "1000"]
+  "gross sale values" → "gross_sale_values"
+  → "products whose gross_sale_values are greater than 1000"
+
+Pass 5 (operator normalization):
+  "are greater than" → strip copula "are" → "greater than"
+  → "products whose gross_sale_values greater than 1000"
+
+Pass 6 (assembly):
+  → "find products where gross_sale_values greater than 1000 after 2026-02-09"
+```
+
+**OUTPUT**: `"find products where gross_sale_values greater than 1000 after 2026-02-09"`
+
+---
+
+## Stage 2: Parser ([parser.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/test_parser.py))
+
+**Input**: Semi-structured string from preprocessor
+**Output**: Raw [QueryRoot](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#17-24) AST (unresolved fields, untyped values)
+
+```
+INPUT:  "find products where gross_sale_values greater than 1000 after 2026-02-09"
+
+OUTPUT:
+  QueryRoot(intent="find", collection="products", raw_text="...")
+  ├── ComparisonNode(field="gross_sale_values", operator="$gt")
+  │   └── ValueNode(raw="1000")
+  └── ComparisonNode(field="date", operator="$gt")
+      └── ValueNode(raw="2026-02-09")
+```
+
+Note: `"products"` and `"gross_sale_values"` are still raw user text — not schema fields.
+
+---
+
+## Stage 3: Resolver ([resolver.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/resolver.py))
+
+**Input**: Raw AST + [SchemaContext](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/resolver.py#65-260) (built from schema JSON)
+**Output**: Resolved AST (schema field names, typed values, collection FQ name)
+
+```
+INPUT:  QueryRoot(collection="products", ...)
+        ├── ComparisonNode(field="gross_sale_values", operator="$gt", value=ValueNode(raw="1000"))
+        └── ComparisonNode(field="date", operator="$gt", value=ValueNode(raw="2026-02-09"))
+
+RESOLVER ACTIONS:
+  "products"         → concept_map → "store.products" (collection)     confidence=1.0
+  "gross_sale_values" → concept_map → "gross_sale_value" (schema field) confidence=0.93
+  "date"             → concept_map → "created_date" (schema field)     confidence=0.90
+  "1000"             → field type is float → typed_value=1000.0
+  "2026-02-09"       → field type is float (epoch) → typed_value=1741478400.0
+
+OUTPUT:
+  QueryRoot(intent="find", collection="store.products")
+  ├── ComparisonNode(field="gross_sale_value", operator="$gt", meta={confidence: 0.93})
+  │   └── ValueNode(raw="1000", typed_value=1000.0, inferred_type="float")
+  └── ComparisonNode(field="created_date", operator="$gt", meta={confidence: 0.90})
+      └── ValueNode(raw="2026-02-09", typed_value=1741478400.0, inferred_type="float")
+```
+
+---
+
+## Stage 4: Compiler ([compiler.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/compiler.py))
+
+**Input**: Resolved AST
+**Output**: MongoDB query dictionary
+
+```
+INPUT:  (the resolved AST above)
+
+OUTPUT:
+  {
+    "collection": "store.products",
+    "operation": "find",
+    "filter": {
+      "$and": [
+        {"gross_sale_value": {"$gt": 1000.0}},
+        {"created_date": {"$gt": 1741478400.0}}
+      ]
+    }
+  }
+```
+
+---
+
+## Pipeline Orchestration ([pipeline.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/pipeline.py))
+
+```python
+def parse_query(text: str, schema=None) -> dict:
+    preprocessed = preprocess(text)                  # Stage 1: prose → structured
+    ast          = parse(preprocessed)                # Stage 2: text → AST
+    ast          = resolve(ast, schema_ctx)           # Stage 3: AST → resolved AST
+    return         compile(ast)                       # Stage 4: AST → MongoDB dict
+```
+
+---
+
+## More Examples
+
+### Example 2: `"how many orders were placed last week"`
+
+| Stage | Output |
+|---|---|
+| Preprocessor | `"count orders where placed_date after 2026-02-25"` |
+| Parser | [QueryRoot(intent="count", collection="orders")](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#17-24) + [ComparisonNode(field="placed_date", op="$gt", value="2026-02-25")](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#26-33) |
+| Resolver | `collection="shop.orders"`, `field="order_placed_date"`, `value=1740441600.0` |
+| Compiler | `{"collection": "shop.orders", "operation": "countDocuments", "filter": {"order_placed_date": {"$gt": 1740441600.0}}}` |
+
+### Example 3: `"show me the 10 most expensive items sorted by price descending"`
+
+| Stage | Output |
+|---|---|
+| Preprocessor | `"find items sorted by price descending limit 10"` |
+| Parser | [QueryRoot(intent="find", collection="items")](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#17-24) + [SortNode(field="price", dir=-1)](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#104-113) + [LimitNode(10)](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#115-121) |
+| Resolver | `collection="store.items"`, `field="unit_price"` |
+| Compiler | `{"collection": "store.items", "operation": "find", "filter": {}, "sort": {"unit_price": -1}, "limit": 10}` |
+
+### Example 4: `"find all cameras that are active"`
+
+| Stage | Output |
+|---|---|
+| Preprocessor | `"find cameras where status is active"` |
+| Parser | [QueryRoot(intent="find", collection="cameras")](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#17-24) + [ComparisonNode(field="status", op="$eq", value="active")](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#26-33) |
+| Resolver | `collection="cycle_events.docks"`, `field="status"`, `value="active"` |
+| Compiler | `{"collection": "cycle_events.docks", "operation": "find", "filter": {"status": "active"}}` |
+
+---
+
+## File Map (what changes)
+
+```
+parser/
+├── preprocessor.py    ← NEW (~200 lines, spaCy-based)
+├── ast_nodes.py       ← unchanged
+├── parser.py          ← unchanged (minor grammar tweaks possible)
+├── resolver.py        ← unchanged
+├── compiler.py        ← unchanged
+├── pipeline.py        ← updated (add preprocess() call)
+├── normalizer.py      ← can be REMOVED (replaced by preprocessor.py)
+├── semantic_resolver.py ← can be REMOVED (replaced by resolver.py)
+└── __init__.py        ← updated (export preprocess)
+```
+
+The old [normalizer.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/normalizer.py) and [semantic_resolver.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/semantic_resolver.py) were doing partial versions of what the new preprocessor + resolver do. With the preprocessor in place, they're fully superseded.

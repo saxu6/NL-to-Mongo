@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NLMongo - Chat with your Database</title>
+    <meta name="description" content="Natural language interface for MongoDB. Ask questions in plain English and get real database results.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                        <rect width="28" height="28" rx="8" fill="url(#logo-grad)"/>
+                        <path d="M8 10h12M8 14h8M8 18h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                        <defs><linearGradient id="logo-grad" x1="0" y1="0" x2="28" y2="28"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
+                    </svg>
+                </div>
+                <div class="header-text">
+                    <h1>NLMongo</h1>
+                    <span class="tagline">Chat with your database</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="status-dot" id="statusDot"></div>
+                <span class="status-text" id="statusText">Connecting...</span>
+            </div>
+        </header>
+
+        <!-- Chat Area -->
+        <main class="chat-area" id="chatArea">
+            <!-- Welcome message -->
+            <div class="welcome" id="welcome">
+                <div class="welcome-icon">
+                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                        <rect width="48" height="48" rx="14" fill="url(#w-grad)" opacity="0.15"/>
+                        <path d="M14 18h20M14 24h14M14 30h17" stroke="url(#w-grad2)" stroke-width="2.5" stroke-linecap="round"/>
+                        <defs>
+                            <linearGradient id="w-grad" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+                            <linearGradient id="w-grad2" x1="14" y1="18" x2="34" y2="30"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h2>Ask anything about your data</h2>
+                <p>Type a natural language query and I'll translate it to MongoDB and fetch the results.</p>
+                <div class="suggestions">
+                    <button class="suggestion" onclick="useSuggestion(this)">Show me slow events from last week</button>
+                    <button class="suggestion" onclick="useSuggestion(this)">How many events happened for camera CAM001</button>
+                    <button class="suggestion" onclick="useSuggestion(this)">List first 10 metrics</button>
+                    <button class="suggestion" onclick="useSuggestion(this)">Show active docks sorted by name</button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Input Bar -->
+        <footer class="input-bar">
+            <div class="input-wrapper">
+                <textarea
+                    id="queryInput"
+                    placeholder="Ask a question about your data..."
+                    rows="1"
+                    autocomplete="off"
+                    spellcheck="false"
+                ></textarea>
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M3 10h14M11 4l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            <p class="input-hint">Press <kbd>Enter</kbd> to send | <kbd>Shift+Enter</kbd> for new line</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

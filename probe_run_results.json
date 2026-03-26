@@ -1,0 +1,596 @@
+{
+  "summary": {
+    "total": 47,
+    "ok": 37,
+    "fail": 10
+  },
+  "results": [
+    {
+      "id": 1,
+      "query": "show events where camera is CAM001",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "camera_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "query": "find events where camera_id = CAM002",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "camera_id": "CAM002"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "query": "list docks where name equals dock_a",
+      "ok": true,
+      "output": {
+        "collection": "dock_data.docks",
+        "operation": "find",
+        "filter": {
+          "name": "dock_a"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "query": "get metrics where avg_manpower >= 10",
+      "ok": true,
+      "output": {
+        "collection": "manpower_metrics.metrics",
+        "operation": "find",
+        "filter": {
+          "avg_manpower": {
+            "$gte": "10"
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "query": "show events where up_event_duration > 30",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$gt": 30.0
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "query": "show events where duration greater than 30",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$gt": 30.0
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "query": "show events where camera is CAM001 and duration greater than 10",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "$and": [
+            {
+              "camera_id": "CAM001"
+            },
+            {
+              "up_event_duration": {
+                "$gt": 10.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 8,
+      "query": "show events where camera is CAM001 or camera is CAM002",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "$or": [
+            {
+              "camera_id": "CAM001"
+            },
+            {
+              "camera_id": "CAM002"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 9,
+      "query": "show events where camera is CAM001 and duration greater than 10 or duration less than 5",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "$or": [
+            {
+              "$and": [
+                {
+                  "camera_id": "CAM001"
+                },
+                {
+                  "up_event_duration": {
+                    "$gt": 10.0
+                  }
+                }
+              ]
+            },
+            {
+              "up_event_duration": {
+                "$lt": 5.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 10,
+      "query": "show events where (camera is CAM001 and duration greater than 10) or duration less than 5",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "$or": [
+            {
+              "$and": [
+                {
+                  "camera_id": "CAM001"
+                },
+                {
+                  "up_event_duration": {
+                    "$gt": 10.0
+                  }
+                }
+              ]
+            },
+            {
+              "up_event_duration": {
+                "$lt": 5.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 11,
+      "query": "show docks where name contains dock",
+      "ok": true,
+      "output": {
+        "collection": "dock_data.docks",
+        "operation": "find",
+        "filter": {
+          "name": {
+            "$regex": "dock",
+            "$options": "i"
+          }
+        }
+      }
+    },
+    {
+      "id": 12,
+      "query": "show events where loading_unloading_status contains loading",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "loading_unloading_status": {
+            "$regex": "loading",
+            "$options": "i"
+          }
+        }
+      }
+    },
+    {
+      "id": 13,
+      "query": "show events sort by up_event_start desc",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {},
+        "sort": {
+          "up_event_start": -1
+        }
+      }
+    },
+    {
+      "id": 14,
+      "query": "show events order by up_event_start ascending",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {},
+        "sort": {
+          "up_event_start": 1
+        }
+      }
+    },
+    {
+      "id": 15,
+      "query": "show events where camera is CAM001 sort by up_event_start desc limit 5",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "camera_id": "CAM001"
+        },
+        "sort": {
+          "up_event_start": -1
+        },
+        "limit": 5
+      }
+    },
+    {
+      "id": 16,
+      "query": "show events top 3",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {},
+        "limit": 3
+      }
+    },
+    {
+      "id": 17,
+      "query": "count events where camera is CAM001",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "countDocuments",
+        "filter": {
+          "camera_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 18,
+      "query": "delete events where camera is CAM001",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "deleteMany",
+        "filter": {
+          "camera_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "query": "update events where camera is CAM001",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "updateMany",
+        "filter": {
+          "camera_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "query": "total events where camera is CAM001",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "countDocuments",
+        "filter": {
+          "camera_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "query": "number of events where camera is CAM001",
+      "ok": false,
+      "error": "UnexpectedToken: Unexpected token Token('OF', 'of') at line 1, column 13.\nExpected one of: \n\t* TOP\n\t* YOUNGER\n\t* OLDER\n\t* ORDER\n\t* LIMIT\n\t* SORTED\n\t* SORT\n\t* ORDERED\n\t* WHERE\n\t* FIRST\n\t* $END\nPrevious tokens: [Token('WORD', 'number')]\n"
+    },
+    {
+      "id": 22,
+      "query": "how many events where camera is CAM001",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "countDocuments",
+        "filter": {
+          "camera_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 23,
+      "query": "show events where up_event_duration is not 10",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$ne": 10.0
+          }
+        }
+      }
+    },
+    {
+      "id": 24,
+      "query": "show events where up_event_duration != 10",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$ne": 10.0
+          }
+        }
+      }
+    },
+    {
+      "id": 25,
+      "query": "show events where up_event_duration at least 10",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$gte": 10.0
+          }
+        }
+      }
+    },
+    {
+      "id": 26,
+      "query": "show events where up_event_duration at most 10",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$lte": 10.0
+          }
+        }
+      }
+    },
+    {
+      "id": 27,
+      "query": "show events where up_event_duration less than 10",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$lt": 10.0
+          }
+        }
+      }
+    },
+    {
+      "id": 28,
+      "query": "show events where up_event_duration before 10",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$lt": 10.0
+          }
+        }
+      }
+    },
+    {
+      "id": 29,
+      "query": "show events where up_event_duration after 10",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$gt": 10.0
+          }
+        }
+      }
+    },
+    {
+      "id": 30,
+      "query": "show events where camera_id equals CAM001",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "camera_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 31,
+      "query": "show events where camera_id equal to CAM001",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "camera_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 32,
+      "query": "show events where camera_id not equal CAM001",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "camera_id": {
+            "$ne": "CAM001"
+          }
+        }
+      }
+    },
+    {
+      "id": 33,
+      "query": "show users older than 30",
+      "ok": false,
+      "error": "ResolutionError: Unknown collection hint 'users'"
+    },
+    {
+      "id": 34,
+      "query": "show events older than 30",
+      "ok": false,
+      "error": "ResolutionError: Field 'age' does not exist in collection 'cycle_events.events'"
+    },
+    {
+      "id": 35,
+      "query": "show docks younger than 5",
+      "ok": true,
+      "output": {
+        "collection": "dock_data.docks",
+        "operation": "find",
+        "filter": {
+          "image_width": {
+            "$lt": "5"
+          }
+        }
+      }
+    },
+    {
+      "id": 36,
+      "query": "show events where up_event_start after last week",
+      "ok": false,
+      "error": "UnexpectedToken: Unexpected token Token('WORD', 'date') at line 1, column 44.\nExpected one of: \n\t* TOP\n\t* OR\n\t* ORDER\n\t* LIMIT\n\t* SORT\n\t* SORTED\n\t* ORDERED\n\t* FIRST\n\t* $END\n\t* AND\nPrevious tokens: [Token('WORD', 'and')]\n"
+    },
+    {
+      "id": 37,
+      "query": "show events where up_event_start after 2024-01-15",
+      "ok": false,
+      "error": "UnexpectedToken: Unexpected token Token('SIGNED_NUMBER', '-01') at line 1, column 44.\nExpected one of: \n\t* TOP\n\t* OR\n\t* ORDER\n\t* LIMIT\n\t* SORT\n\t* SORTED\n\t* ORDERED\n\t* FIRST\n\t* $END\n\t* AND\nPrevious tokens: [Token('SIGNED_NUMBER', '2024')]\n"
+    },
+    {
+      "id": 38,
+      "query": "show events where up_event_duration > five",
+      "ok": false,
+      "error": "ResolutionError: Could not normalize value 'five' for field 'up_event_duration' (expected float)"
+    },
+    {
+      "id": 39,
+      "query": "show events where up_event_duration greater than twenty",
+      "ok": false,
+      "error": "ResolutionError: Could not normalize value 'twenty' for field 'up_event_duration' (expected float)"
+    },
+    {
+      "id": 40,
+      "query": "show events where camera is 'CAM001'",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "camera_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 41,
+      "query": "show events where camera is \"CAM001\"",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "camera_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 42,
+      "query": "something random gibberish xyz",
+      "ok": false,
+      "error": "UnexpectedToken: Unexpected token Token('WORD', 'random_gibberish_xyz') at line 1, column 16.\nExpected one of: \n\t* TOP\n\t* YOUNGER\n\t* OLDER\n\t* ORDER\n\t* LIMIT\n\t* SORTED\n\t* SORT\n\t* ORDERED\n\t* WHERE\n\t* FIRST\n\t* $END\nPrevious tokens: [Token('WORD', 'something')]\n"
+    },
+    {
+      "id": 43,
+      "query": "show events camera CAM001",
+      "ok": false,
+      "error": "UnexpectedToken: Unexpected token Token('WORD', 'camera') at line 1, column 13.\nExpected one of: \n\t* TOP\n\t* YOUNGER\n\t* OLDER\n\t* ORDER\n\t* LIMIT\n\t* SORTED\n\t* SORT\n\t* ORDERED\n\t* WHERE\n\t* FIRST\n\t* $END\nPrevious tokens: [Token('WORD', 'events')]\n"
+    },
+    {
+      "id": 44,
+      "query": "show all events",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {}
+      }
+    },
+    {
+      "id": 45,
+      "query": "list metrics",
+      "ok": true,
+      "output": {
+        "collection": "manpower_metrics.metrics",
+        "operation": "find",
+        "filter": {}
+      }
+    },
+    {
+      "id": 46,
+      "query": "get docks where camera_id is CAM001",
+      "ok": true,
+      "output": {
+        "collection": "dock_data.docks",
+        "operation": "find",
+        "filter": {
+          "_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 47,
+      "query": "show events where up_event_duration in 10",
+      "ok": false,
+      "error": "UnexpectedToken: Unexpected token Token('IN', 'in') at line 1, column 37.\nExpected one of: \n\t* BELOW\n\t* MORETHAN\n\t* EQUALS\n\t* LIKE\n\t* \">=\"\n\t* \"equal\"i\n\t* EQUAL\n\t* GREATER\n\t* CONTAINS\n\t* MORE\n\t* AFTER\n\t* CONTAIN\n\t* ABOVE\n\t* LESS\n\t* AT\n\t* BEFORE\n\t* IS\n\t* MATCH\n\t* \"<=\"\n\t* MATCHES\n\t* \"!=\"\n\t* DOES\n\t* LESSTHAN\n\t* NOT\nPrevious tokens: [Token('WORD', 'up_event_duration')]\n"
+    }
+  ]
+}

@@ -1,0 +1,232 @@
+# Parser Redesign — Lark Grammar + AST + Visitor Architecture
+
+## The Big Idea
+
+Replace our hand-written tokenizer + positional AST builder with a **formal grammar** (Lark EBNF) + **auto-generated parse tree** + **visitor/compiler** that emits safe MongoDB queries. Keep the **semantic resolver** for field/collection matching. Add **NLP libraries** for dates, synonyms, fuzzy matching.
+
+```
+User NL text
+    ↓
+Text Normalizer (spaCy lemma, synonym expand, dateparser, autocorrect)
+    ↓
+Lark Grammar Parser (EBNF rules → auto AST)
+    ↓
+AST (LogicalNode, ComparisonNode, AggNode, SortNode, ProjectionNode, LimitNode)
+    ↓
+MongoCompiler (visitor walks AST → safe MongoDB dict)
+    ↓
+Query Guards (whitelist operators, block $where, depth/size limits)
+    ↓
+{ query, explanation, confidence, warnings }
+```
+
+### Why Lark over hand-written
+| | Hand-written (current) | Lark grammar (proposed) |
+|---|---|---|
+| Parentheses [(A and B) or C](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/backend/routes/chat.py#27-107) | ❌ Not supported | ✅ Grammar handles recursion |
+| Operator precedence | ❌ Ad-hoc, bugs | ✅ Grammar rules define it |
+| Adding new operators | Must edit 3 files | Add 1 grammar rule |
+| Ambiguity | Silent wrong output | Lark Earley parser resolves it |
+| Multi-word values | ❌ Broken | ✅ Quoted string in grammar |
+| Maintainability | 900+ lines across 4 files | Grammar file + compiler |
+
+---
+
+## Dependencies
+
+```
+pip install lark spacy dateparser rapidfuzz nltk inflect
+python -m spacy download en_core_web_sm
+python -c "import nltk; nltk.download('wordnet'); nltk.download('omw-1.4')"
+```
+
+---
+
+## Phase 1 — Grammar + Parser
+
+### [NEW] [nlquery.lark](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/nlquery.lark)
+
+Formal EBNF grammar for natural language queries. Borrowed patterns from hrq2mongoq + rsql:
+
+```ebnf
+start: statement
+
+statement: intent_clause? collection_clause? filter_clause? sort_clause? limit_clause? projection_clause?
+
+// Intents
+intent_clause: INTENT
+INTENT: "find"i | "get"i | "show"i | "list"i | "count"i | "delete"i | "update"i | ...
+
+// Collections
+collection_clause: "from"i? COLLECTION_NAME | COLLECTION_NAME
+
+// Filters — with full AND/OR/NOT/parentheses support
+filter_clause: "where"i expression | "with"i expression | "having"i expression
+expression: or_expr
+or_expr: and_expr ("or"i and_expr)*
+and_expr: not_expr ("and"i not_expr)*
+not_expr: "not"i atom | atom
+atom: "(" expression ")" | comparison
+
+// Comparisons — all operator styles
+comparison: field_name comp_op value
+           | field_name "between"i value "and"i value     // range
+           | field_name "either"i value ("or"i value)+    // either...or → $in
+           | field_name "both"i comp_expr ("and"i comp_expr)+ // both...and
+           | field_name "exists"i                          // $exists: true
+           | field_name "does"i "not"i "exist"i            // $exists: false
+           | field_name "is"i "null"i                      // $exists: false
+           | field_name "is"i "not"i "null"i               // $exists: true
+
+comp_op: "is"i | "equals"i | "="
+       | "is not"i | "!=" | "does not equal"i             // $ne
+       | "greater than"i | ">" | "above"i                 // $gt
+       | "less than"i | "<" | "below"i                    // $lt
+       | ">=" | "at least"i                               // $gte
+       | "<=" | "at most"i                                 // $lte
+       | "in"i | "is in"i                                  // $in
+       | "not in"i                                         // $nin
+       | "contains"i | "matches"i                          // $regex
+       | "starts with"i | "ends with"i                     // $regex anchored
+
+// Sort
+sort_clause: "sort"i "by"i sort_field ("," sort_field)* | "order"i "by"i sort_field ("," sort_field)*
+sort_field: field_name sort_dir?
+sort_dir: "asc"i | "ascending"i | "desc"i | "descending"i
+
+// Limit
+limit_clause: "limit"i NUMBER | "top"i NUMBER | "first"i NUMBER
+
+// Projection
+projection_clause: "select"i field_list | "only"i "return"i? field_list | "show"i "only"i field_list
+field_list: field_name ("," field_name)* | field_name ("and"i field_name)*
+
+// Values
+value: QUOTED_STRING | NUMBER | BOOLEAN | NULL | DATE | WORD+
+field_name: FIELD_NAME | DOTTED_FIELD
+```
+
+---
+
+### [NEW] [normalizer.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/normalizer.py)
+
+Pre-processor that runs **before** parsing. Transforms raw NL into grammar-parseable form:
+
+1. **spaCy lemmatization**: `"loading"` → `"load"`, `"events"` → `"event"`
+2. **Date normalization**: `"last week"` → `"2026-02-24"` via dateparser
+3. **Number word conversion**: `"five"` → `5` via inflect
+4. **Synonym expansion**: `"worker count"` → `"avg_total_manpower"` via SemanticResolver
+5. **Autocorrect**: `"camra_id"` → `"camera_id"` via rapidfuzz
+6. **Field recognition**: Identify schema fields in the text
+
+---
+
+### [NEW] [compiler.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/compiler.py)
+
+Visitor that walks the Lark parse tree and emits MongoDB query dict:
+
+```python
+class MongoCompiler(Transformer):
+    def comparison(self, items):
+        field, op, value = items
+        resolved = self.resolver.resolve_field(field, self.schema_fields)
+        return {resolved: self._compile_op(op, value)}
+    
+    def or_expr(self, items):
+        if len(items) == 1: return items[0]
+        return {"$or": list(items)}
+    
+    def and_expr(self, items):
+        if len(items) == 1: return items[0]
+        return {"$and": list(items)}
+    
+    def not_expr(self, items):
+        # Invert the comparison operator
+        ...
+```
+
+Includes:
+- **Query guards**: block `$where`, limit pipeline depth, cap result size
+- **Explanation builder**: generate English description of what was parsed
+- **Confidence scoring**: based on field resolution quality + grammar ambiguity
+
+---
+
+### [KEEP] [semantic_resolver.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/semantic_resolver.py)
+
+✅ Already created. Used by both normalizer and compiler for field/collection resolution.
+
+---
+
+### [MODIFY] [parser_engine.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/parser_engine.py)
+
+New pipeline orchestration:
+```python
+class NLQueryParser:
+    def __init__(self, schema):
+        self.resolver = SemanticResolver(schema)
+        self.normalizer = TextNormalizer(self.resolver)
+        self.lark_parser = Lark(grammar_file, parser="earley")
+        self.compiler = MongoCompiler(schema, self.resolver)
+    
+    def parse(self, nl_query):
+        normalized = self.normalizer.normalize(nl_query)
+        tree = self.lark_parser.parse(normalized)
+        return self.compiler.transform(tree)
+```
+
+---
+
+## Phase 2 — Benchmark Integration
+
+### [NEW] [benchmarks/](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/benchmarks/)
+
+Download and adapt:
+- **DocSpider** `dev.json` (766 NL→MQL pairs) 
+- **MongoDB mongosh** `benchmark.csv` (766 pairs across 8 DBs)
+- **Custom evaluator** that feeds NL to our parser and compares output
+
+---
+
+## Phase 3 — Guards & Safety
+
+- Whitelist allowed MongoDB operators
+- Block: `$where`, `$function`, `$accumulator` (code injection risk)
+- Max pipeline depth: 10 stages
+- Max result limit: 50 documents
+- Query timeout: 30 seconds
+
+---
+
+## Execution Order
+
+| Step | What | Risk |
+|---|---|---|
+| 1 | Install deps (lark, spacy, dateparser, rapidfuzz, nltk, inflect) | None |
+| 2 | Write `nlquery.lark` grammar file | Low |
+| 3 | Write `normalizer.py` (text preprocessor) | Low |
+| 4 | Write `compiler.py` (AST → MongoDB visitor) | Medium |
+| 5 | Update [parser_engine.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/parser_engine.py) (new pipeline with old fallback) | Medium |
+| 6 | Run 35-test regression | Checkpoint |
+| 7 | Add new test cases (parentheses, either/or, multi-sort, typos) | Low |
+| 8 | Download + integrate benchmarks | Low |
+| 9 | Query guards + explanation output | Low |
+
+> [!IMPORTANT]
+> Full Lark system — old parser modules will be replaced entirely.
+
+---
+
+## Later Stage Development Ideas
+
+| # | Capability | Description | Reference |
+|---|---|---|---|
+| 1 | **Multi-target compilation** | Same AST → MongoDB, SQL, Elasticsearch, etc. Write a new visitor per target | luqum, bson-transpilers |
+| 2 | **RSQL/FIQL API endpoint** | Add second grammar for programmatic query syntax alongside NL | rsql-parser, piotr-oles/rsql |
+| 3 | **Grammar-based autocomplete** | Lark interactive parser → real-time valid-next-token suggestions in chatbot | liqe |
+| 4 | **Query optimization passes** | AST transforms: filter merging, redundancy elimination, index hints, limit pushdown | rsql modular arch |
+| 5 | **Standalone parser generation** | Lark generates standalone [.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/run_server.py) parser — zero runtime deps | Lark standalone |
+| 6 | **Cross-language portability** | Lark.js reads same `.lark` grammar — browser-side parsing/validation | Lark.js |
+| 7 | **1500+ benchmark tests** | Integrate DocSpider (766) + MongoDB mongosh (766) + SM3 test pairs | DocSpider, mongosh, SM3 |
+| 8 | **Hybrid local model path** | Simple queries → Lark; complex/ambiguous → local fine-tuned model → same AST | nl2query |
+| 9 | **Query explanation visitor** | `ExplainVisitor` walks AST → English description of what was parsed | C# Lucene visitor |

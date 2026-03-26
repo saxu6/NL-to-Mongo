@@ -1,0 +1,275 @@
+# AST Node Design — NL → MongoDB
+
+## Node Hierarchy
+
+```
+QueryNode (base)
+├── QueryRoot           intent, collection, raw_text
+├── ComparisonNode      field, operator, value
+├── LogicalNode         operator ($and/$or/$not)
+├── GroupNode           field, accumulator
+├── SortNode            field, direction
+├── LimitNode           value
+├── ProjectionNode      fields, mode
+├── UpdateNode          field, value
+└── ValueNode           raw, typed_value, inferred_type
+```
+
+## Node Definitions
+
+```python
+from dataclasses import dataclass, field
+from typing import Any
+
+@dataclass
+class QueryNode:
+    children: list["QueryNode"] = field(default_factory=list)
+    meta: dict = field(default_factory=dict)   # processors attach annotations here
+
+@dataclass
+class QueryRoot(QueryNode):
+    intent: str = "find"        # find | count | aggregate | delete | update
+    collection: str = ""        # empty until resolver fills it
+    raw_text: str = ""
+
+@dataclass
+class ComparisonNode(QueryNode):
+    field: str = ""             # raw text until resolved
+    operator: str = "$eq"       # $eq $gt $gte $lt $lte $ne $in $regex
+    value: Any = None           # ValueNode child
+
+@dataclass
+class LogicalNode(QueryNode):
+    operator: str = "$and"      # $and $or $not
+
+@dataclass
+class GroupNode(QueryNode):
+    field: str = ""
+    accumulator: str = "$count" # $sum $avg $min $max $count
+
+@dataclass
+class SortNode(QueryNode):
+    field: str = ""
+    direction: int = -1         # 1 = asc, -1 = desc
+
+@dataclass
+class LimitNode(QueryNode):
+    value: int = 0
+
+@dataclass
+class ProjectionNode(QueryNode):
+    fields: list = field(default_factory=list)
+    mode: str = "include"       # include | exclude
+
+@dataclass
+class UpdateNode(QueryNode):
+    field: str = ""
+    value: Any = None
+
+@dataclass
+class ValueNode(QueryNode):
+    raw: str = ""               # original text
+    typed_value: Any = None     # set by type annotator
+    inferred_type: str = ""     # string | float | int | date | bool
+```
+
+---
+
+## Example 1: `"show users older than 30"`
+
+### After parsing (raw AST)
+
+```
+QueryRoot(intent="find", collection="", raw_text="show users older than 30")
+└── ComparisonNode(field="age", operator="$gt")
+    └── ValueNode(raw="30")
+```
+
+Parser recognized:
+- `"users"` → collection hint
+- `"older than"` → operator `$gt`
+- `"30"` → value
+- `"older"` implies the field concept `"age"` (from comparative adjective pattern)
+
+### After resolver
+
+```
+QueryRoot(intent="find", collection="mydb.users")
+└── ComparisonNode(field="age", operator="$gt", meta={confidence: 1.0})
+    └── ValueNode(raw="30")
+```
+
+Resolver: `"users"` → matched collection `mydb.users`. `"age"` → exact match to schema field [age](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/frontend/app.js#96-108).
+
+### After type annotator
+
+```
+QueryRoot(intent="find", collection="mydb.users")
+└── ComparisonNode(field="age", operator="$gt")
+    └── ValueNode(raw="30", typed_value=30, inferred_type="int")
+```
+
+Schema says [age](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/frontend/app.js#96-108) is [int](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/compiler.py#189-201) → coerce `"30"` to `30`.
+
+### Compiled MongoDB query
+
+```json
+{
+  "collection": "mydb.users",
+  "operation": "find",
+  "filter": {"age": {"$gt": 30}},
+  "confidence": 1.0
+}
+```
+
+---
+
+## Example 2: `"list orders from last week sorted by price"`
+
+### After parsing
+
+```
+QueryRoot(intent="find", collection="", raw_text="list orders from last week sorted by price")
+├── ComparisonNode(field="date", operator="$gte")
+│   └── ValueNode(raw="2026-02-25")         ← tokenizer converted "last week"
+└── SortNode(field="price", direction=-1)    ← default desc
+```
+
+### After resolver
+
+```
+QueryRoot(intent="find", collection="shop.orders")
+├── ComparisonNode(field="order_date", operator="$gte", meta={confidence: 0.88})
+│   └── ValueNode(raw="2026-02-25")
+└── SortNode(field="total_price", direction=-1, meta={confidence: 0.90})
+```
+
+Resolver: `"orders"` → `shop.orders`. `"date"` → `order_date` (suffix priority: [_date](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/normalizer.py#124-145)). `"price"` → `total_price`.
+
+### After type annotator
+
+```
+QueryRoot(intent="find", collection="shop.orders")
+├── ComparisonNode(field="order_date", operator="$gte")
+│   └── ValueNode(raw="2026-02-25", typed_value=1740441600.0, inferred_type="float")
+└── SortNode(field="total_price", direction=-1)
+```
+
+Schema says `order_date` is `float` (epoch) → coerce date string to epoch float.
+
+### Compiled MongoDB query
+
+```json
+{
+  "collection": "shop.orders",
+  "operation": "find",
+  "filter": {"order_date": {"$gte": 1740441600.0}},
+  "sort": {"total_price": -1},
+  "confidence": 0.88
+}
+```
+
+---
+
+## Example 3: `"count events for camera CAM001"`
+
+### After parsing
+
+```
+QueryRoot(intent="count", raw_text="count events for camera CAM001")
+└── ComparisonNode(field="camera", operator="$eq")
+    └── ValueNode(raw="CAM001")
+```
+
+### After resolver → annotator → compiler
+
+```json
+{
+  "collection": "cycle_events.events",
+  "operation": "aggregate",
+  "pipeline": [
+    {"$match": {"camera_id": "CAM001"}},
+    {"$count": "total"}
+  ]
+}
+```
+
+---
+
+## Example 4: `"top 5 cameras with the most events"`
+
+### After parsing
+
+```
+QueryRoot(intent="aggregate")
+├── GroupNode(field="camera", accumulator="$count")
+├── SortNode(field="count", direction=-1)
+└── LimitNode(value=5)
+```
+
+### After resolver → annotator → compiler
+
+```json
+{
+  "collection": "cycle_events.events",
+  "operation": "aggregate",
+  "pipeline": [
+    {"$group": {"_id": "$camera_id", "count": {"$sum": 1}}},
+    {"$sort": {"count": -1}},
+    {"$limit": 5}
+  ]
+}
+```
+
+---
+
+## Example 5: `"show active docks where name contains DOCK and sort by camera_id ascending"`
+
+### After parsing
+
+```
+QueryRoot(intent="find")
+├── ComparisonNode(field="status", operator="$eq")
+│   └── ValueNode(raw="active")
+├── ComparisonNode(field="name", operator="$regex")
+│   └── ValueNode(raw="DOCK")
+└── SortNode(field="camera_id", direction=1)
+```
+
+### Compiled
+
+```json
+{
+  "collection": "cycle_events.docks",
+  "operation": "find",
+  "filter": {
+    "$and": [
+      {"status": "active"},
+      {"dock_name": {"$regex": "DOCK", "$options": "i"}}
+    ]
+  },
+  "sort": {"camera_id": 1}
+}
+```
+
+---
+
+## Compilation Rules
+
+How each node type maps to MongoDB syntax:
+
+| AST Node | MongoDB Output |
+|---|---|
+| `ComparisonNode(f, "$eq", v)` | `{f: v}` |
+| `ComparisonNode(f, "$gt", v)` | `{f: {"$gt": v}}` |
+| `ComparisonNode(f, "$regex", v)` | `{f: {"$regex": v, "$options": "i"}}` |
+| `ComparisonNode(f, "$in", [a,b])` | `{f: {"$in": [a, b]}}` |
+| `LogicalNode("$and", [c1, c2])` | `{"$and": [compile(c1), compile(c2)]}` |
+| `LogicalNode("$or", [c1, c2])` | `{"$or": [compile(c1), compile(c2)]}` |
+| `GroupNode(f, "$count")` | `{"$group": {"_id": "$"+f, "count": {"$sum": 1}}}` |
+| `GroupNode(f, "$avg")` | `{"$group": {"_id": null, "avg_"+f: {"$avg": "$"+f}}}` |
+| [SortNode(f, d)](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#104-113) | `{"$sort": {f: d}}` or top-level `sort: {f: d}` |
+| [LimitNode(n)](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#115-121) | `{"$limit": n}` or top-level `limit: n` |
+| [ProjectionNode([a,b], "include")](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#87-102) | `projection: {a: 1, b: 1}` |
+
+**Rule**: If `QueryRoot.intent == "find"`, sort/limit go as top-level keys. If `intent == "aggregate"`, they become pipeline stages.

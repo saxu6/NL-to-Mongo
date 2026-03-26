@@ -1,27 +1,21 @@
-import sys
-import os
+from functools import lru_cache
 import json
-
-base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, base_dir)
+from pathlib import Path
 
 from parser import parse_query
 from backend.config import settings
 
 
-def load_schema():
-    try:
-        with open(settings.SCHEMA_FILE_PATH, "r") as f:
-            return json.load(f)
-    except Exception:
-        return None
+@lru_cache(maxsize=1)
+def load_schema() -> dict:
+    schema_path = Path(settings.SCHEMA_FILE_PATH)
+    with schema_path.open("r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 def convert_nl_to_mongodb(query: str, use_schema: bool = True):
+    # The parser requires schema context; keep `use_schema` for API compatibility.
     schema = load_schema()
-    if schema is None:
-        raise Exception("Failed to load database schema")
-
     return parse_query(query, schema)
 
 

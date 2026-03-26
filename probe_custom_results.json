@@ -1,0 +1,459 @@
+{
+  "summary": {
+    "total": 30,
+    "ok": 23,
+    "fail": 7
+  },
+  "results": [
+    {
+      "id": 1,
+      "query": "please show me all events where camera is CAM001",
+      "preprocessed": "find all events where camera is CAM001",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "camera_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "query": "give me the list of events where duration greater than 30",
+      "preprocessed": "find events where duration greater than 30",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$gt": 30.0
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "query": "can you get me events with camera id equal to CAM002",
+      "preprocessed": "find events with camera_id equal to CAM002",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "camera_id": "CAM002"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "query": "i want to see events where up_event_duration at least 10",
+      "preprocessed": "find events where up_event_duration at least 10",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$gte": 10.0
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "query": "could you please list docks where camera name contains gate",
+      "preprocessed": "find docks where camera_name contains gate",
+      "ok": true,
+      "output": {
+        "collection": "dock_data.docks",
+        "operation": "find",
+        "filter": {
+          "camera_name": {
+            "$regex": "gate",
+            "$options": "i"
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "query": "show events where loading unloading status contains loading",
+      "preprocessed": "find events where loading_unloading_status contains loading",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "loading_unloading_status": {
+            "$regex": "loading",
+            "$options": "i"
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "query": "show events where average total manpower greater than 3",
+      "preprocessed": "find events where avg_total_manpower greater than 3",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "avg_total_manpower": {
+            "$gt": 3.0
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "query": "show metrics where peak manpower > 4",
+      "preprocessed": "find metrics where peak_manpower > 4",
+      "ok": true,
+      "output": {
+        "collection": "manpower_metrics.metrics",
+        "operation": "find",
+        "filter": {
+          "peak_manpower": {
+            "$gt": 4
+          }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "query": "show docks where camera password is secret",
+      "preprocessed": "find docks where camera_password is secret",
+      "ok": true,
+      "output": {
+        "collection": "dock_data.docks",
+        "operation": "find",
+        "filter": {
+          "camera_password": "secret"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "query": "show docks where video time start after 2024-01-01",
+      "preprocessed": "find docks where video_time_start after 2024-01-01",
+      "ok": true,
+      "output": {
+        "collection": "dock_data.docks",
+        "operation": "find",
+        "filter": {
+          "video_time_start": {
+            "$gt": "2024-01-01"
+          }
+        }
+      }
+    },
+    {
+      "id": 11,
+      "query": "show events where camera is CAM001 and duration greater than 10 sorted by up event start descending first 5",
+      "preprocessed": "find events where camera is CAM001 and duration greater than 10 sorted by up_event_start descending first 5",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "$and": [
+            {
+              "camera_id": "CAM001"
+            },
+            {
+              "up_event_duration": {
+                "$gt": 10.0
+              }
+            }
+          ]
+        },
+        "sort": {
+          "up_event_start": -1
+        },
+        "limit": 5
+      }
+    },
+    {
+      "id": 12,
+      "query": "list metrics where average manpower greater than 2 and peak manpower greater than 5 order by window start asc limit 10",
+      "preprocessed": "find metrics where avg_manpower greater than 2 and peak_manpower greater than 5 order by window_start asc limit 10",
+      "ok": true,
+      "output": {
+        "collection": "manpower_metrics.metrics",
+        "operation": "find",
+        "filter": {
+          "$and": [
+            {
+              "avg_manpower": {
+                "$gt": "2"
+              }
+            },
+            {
+              "peak_manpower": {
+                "$gt": 5
+              }
+            }
+          ]
+        },
+        "sort": {
+          "window_start": 1
+        },
+        "limit": 10
+      }
+    },
+    {
+      "id": 13,
+      "query": "show docks where status is active or status is inactive top 2",
+      "preprocessed": "find docks where status is active or status is inactive top 2",
+      "ok": true,
+      "output": {
+        "collection": "dock_data.docks",
+        "operation": "find",
+        "filter": {
+          "$or": [
+            {
+              "status": "active"
+            },
+            {
+              "status": "inactive"
+            }
+          ]
+        },
+        "limit": 2
+      }
+    },
+    {
+      "id": 14,
+      "query": "show events where camera is CAM001 and duration greater than 10 or duration less than 5",
+      "preprocessed": "find events where camera is CAM001 and duration greater than 10 or duration less than 5",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "$or": [
+            {
+              "$and": [
+                {
+                  "camera_id": "CAM001"
+                },
+                {
+                  "up_event_duration": {
+                    "$gt": 10.0
+                  }
+                }
+              ]
+            },
+            {
+              "up_event_duration": {
+                "$lt": 5.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 15,
+      "query": "show events where (camera is CAM001 and duration greater than 10) or duration less than 5",
+      "preprocessed": "find events where (camera is CAM001 and duration greater than 10) or duration less than 5",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "$or": [
+            {
+              "$and": [
+                {
+                  "camera_id": "CAM001"
+                },
+                {
+                  "up_event_duration": {
+                    "$gt": 10.0
+                  }
+                }
+              ]
+            },
+            {
+              "up_event_duration": {
+                "$lt": 5.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 16,
+      "query": "show events in the past week",
+      "preprocessed": "find events where date after 2026-03-02",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "intermediate_idle_time": {
+            "$gt": "2026-03-02"
+          }
+        }
+      }
+    },
+    {
+      "id": 17,
+      "query": "show events where up_event_start after last week",
+      "preprocessed": "find events where up_event_start after and date after 2026-03-02",
+      "ok": false,
+      "error": "UnexpectedToken: Unexpected token Token('WORD', 'date') at line 1, column 44.\nExpected one of: \n\t* AND\n\t* OR\n\t* SORTED\n\t* ORDER\n\t* FIRST\n\t* $END\n\t* SORT\n\t* LIMIT\n\t* TOP\n\t* ORDERED\nPrevious tokens: [Token('WORD', 'and')]\n"
+    },
+    {
+      "id": 18,
+      "query": "show metrics from past 30 days",
+      "preprocessed": "find metrics where date after 2026-02-07",
+      "ok": false,
+      "error": "ResolutionError: Field 'date' does not exist in collection 'manpower_metrics.metrics'"
+    },
+    {
+      "id": 19,
+      "query": "count events during the last month",
+      "preprocessed": "count events where date after 2026-02-07",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "countDocuments",
+        "filter": {
+          "intermediate_idle_time": {
+            "$gt": "2026-02-07"
+          }
+        }
+      }
+    },
+    {
+      "id": 20,
+      "query": "show docks from yesterday",
+      "preprocessed": "find docks where date after 2026-03-08",
+      "ok": true,
+      "output": {
+        "collection": "dock_data.docks",
+        "operation": "find",
+        "filter": {
+          "trackers_cb_data": {
+            "$gt": "2026-03-08"
+          }
+        }
+      }
+    },
+    {
+      "id": 21,
+      "query": "give me the list of products whose gross sale values are greater than 1000 in the past month",
+      "preprocessed": "find products whose table_name greater than 1000 and date after 2026-02-07",
+      "ok": false,
+      "error": "ResolutionError: Unknown collection hint 'products'"
+    },
+    {
+      "id": 22,
+      "query": "how many orders were placed last week",
+      "preprocessed": "count orders where date after 2026-03-02",
+      "ok": false,
+      "error": "ResolutionError: Unknown collection hint 'orders'"
+    },
+    {
+      "id": 23,
+      "query": "show users older than 30",
+      "preprocessed": "find users older than 30",
+      "ok": false,
+      "error": "ResolutionError: Unknown collection hint 'users'"
+    },
+    {
+      "id": 24,
+      "query": "show events older than 30",
+      "preprocessed": "find events older than 30",
+      "ok": false,
+      "error": "ResolutionError: Field 'age' does not exist in collection 'cycle_events.events'"
+    },
+    {
+      "id": 25,
+      "query": "something random gibberish xyz",
+      "preprocessed": "find something random gibberish xyz",
+      "ok": false,
+      "error": "UnexpectedToken: Unexpected token Token('WORD', 'random') at line 1, column 16.\nExpected one of: \n\t* OLDER\n\t* ORDER\n\t* SORTED\n\t* YOUNGER\n\t* FIRST\n\t* $END\n\t* SORT\n\t* WHERE\n\t* LIMIT\n\t* TOP\n\t* ORDERED\nPrevious tokens: [Token('WORD', 'something')]\n"
+    },
+    {
+      "id": 26,
+      "query": "show events where up_event_duration greater than five",
+      "preprocessed": "find events where up_event_duration greater than 5",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$gt": 5.0
+          }
+        }
+      }
+    },
+    {
+      "id": 27,
+      "query": "show events where up_event_duration greater than 5",
+      "preprocessed": "find events where up_event_duration greater than 5",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$gt": 5.0
+          }
+        }
+      }
+    },
+    {
+      "id": 28,
+      "query": "show events where camera is 'CAM001'",
+      "preprocessed": "find events where camera is 'CAM001'",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "camera_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 29,
+      "query": "show events where camera is \"CAM001\"",
+      "preprocessed": "find events where camera is \"CAM001\"",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "camera_id": "CAM001"
+        }
+      }
+    },
+    {
+      "id": 30,
+      "query": "show events where up_event_duration in 10",
+      "preprocessed": "find events where up_event_duration in 10",
+      "ok": true,
+      "output": {
+        "collection": "cycle_events.events",
+        "operation": "find",
+        "filter": {
+          "up_event_duration": {
+            "$in": [
+              10.0
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

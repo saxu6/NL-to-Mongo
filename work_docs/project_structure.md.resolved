@@ -1,0 +1,292 @@
+# NL → MongoDB Compiler — Project Structure
+
+## Directory Layout
+
+```
+nl_to_mongo/
+├── parser/
+│   ├── __init__.py          # Public API: parse_query(nl_text, schema) → dict
+│   ├── tokens.py            # Token dataclass + tokenize() function
+│   ├── ast_nodes.py         # All AST node types (dataclasses)
+│   ├── parser.py            # Token stream → raw AST
+│   ├── resolver.py          # Raw AST + schema → resolved AST
+│   ├── annotator.py         # Resolved AST + schema → typed AST
+│   ├── validator.py         # Typed AST → validated AST (or error)
+│   └── compiler.py          # Validated AST → MongoDB query dict
+├── backend/                 # FastAPI server (unchanged)
+├── frontend/                # Web UI (unchanged)
+├── full_schema.json         # MongoDB schema definition
+└── test_parser.py           # Test suite
+```
+
+8 files. No subdirectories inside `parser/`. No abstract base classes.
+
+---
+
+## Module Definitions
+
+### `tokens.py` — Tokenizer
+
+**Corresponds to**: Lucene `Token.java` + `StandardSyntaxParserTokenManager.java` / SQLGlot `tokens.py` + `tokenizer_core.py`
+
+```
+class Token:
+    type: str         # WORD, NUMBER, DATE, QUOTED, OPERATOR, FIELD_REF
+    value: str        # original text
+    normalized: str   # lowercased, cleaned
+    position: int     # offset in source string
+
+def tokenize(text: str) → list[Token]
+```
+
+**Responsibilities:**
+- Split text on whitespace and punctuation
+- Classify tokens by pattern (numbers, dates, quoted strings, identifiers)
+- Convert number words → digits (`"five"` → `5`)
+- Convert relative dates → ISO strings (`"last week"` → `"2026-02-25"`)
+- Preserve casing for value tokens (`CAM001`)
+
+**Does NOT do:** Schema lookups, field resolution, semantic interpretation.
+
+---
+
+### [ast_nodes.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py) — AST Node Definitions
+
+**Corresponds to**: Lucene `core/nodes/*.java` (22 files) / SQLGlot `expressions/` (~200 classes)
+
+```
+class QueryNode:                    # Base — all nodes inherit from this
+    children: list[QueryNode]
+    meta: dict                      # Tags/annotations added by processors
+
+class QueryRoot(QueryNode):         # Top-level container
+    intent: str                     # "find" | "count" | "aggregate" | "delete" | "update"
+    collection: str                 # "" until resolved
+    raw_text: str
+
+class ComparisonNode(QueryNode):    # field op value
+    field: str
+    operator: str                   # "$eq" "$gt" "$gte" "$lt" "$lte" "$ne" "$in" "$regex"
+    value: ValueNode
+
+class LogicalNode(QueryNode):       # boolean combiner
+    operator: str                   # "$and" "$or" "$not"
+
+class GroupNode(QueryNode):         # aggregation grouping
+    field: str
+    accumulator: str                # "$sum" "$avg" "$min" "$max" "$count"
+
+class SortNode(QueryNode):          # ordering
+    field: str
+    direction: int                  # 1 or -1
+
+class LimitNode(QueryNode):         # result cap
+    value: int
+
+class ProjectionNode(QueryNode):    # field selection
+    fields: list[str]
+    mode: str                       # "include" | "exclude"
+
+class UpdateNode(QueryNode):        # $set clause
+    field: str
+    value: ValueNode
+
+class ValueNode(QueryNode):         # leaf — holds a value
+    raw: str                        # text as typed
+    typed_value: Any                # set by annotator
+    inferred_type: str              # "string" "float" "int" "date" "bool"
+```
+
+11 node types total. Each is a plain dataclass. No methods beyond [__init__](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/normalizer.py#78-81).
+
+**Design rule** (from Lucene): Nodes carry **data only**. All logic lives in processors and the compiler.
+
+---
+
+### [parser.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/test_parser.py) — Parser
+
+**Corresponds to**: Lucene `StandardSyntaxParser.java` / SQLGlot [parser.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/test_parser.py)
+
+```
+def parse(tokens: list[Token]) → QueryRoot
+```
+
+**Responsibilities:**
+- Consume token stream left-to-right
+- Recognize patterns and build AST nodes:
+
+| Pattern | Tokens | Node produced |
+|---|---|---|
+| Explicit comparison | `WORD OP VALUE` | `ComparisonNode` |
+| "for" pattern | `"for" WORD VALUE` | `ComparisonNode(op="$eq")` |
+| Intent keyword | `"count"/"delete"/"update"` | sets `QueryRoot.intent` |
+| Group-by | `"by"/"per" WORD` | `GroupNode` |
+| Top-N ranking | `"top" NUM WORD "most/least" WORD` | `GroupNode + SortNode + LimitNode` |
+| Sort | `"sort/order by" WORD "asc/desc"` | [SortNode](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#104-113) |
+| Limit | `"first/limit" NUM` | [LimitNode](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#115-121) |
+| Logical | `"and"/"or"` between conditions | `LogicalNode` wrapping children |
+| Collection hint | known collection word | sets `QueryRoot.collection` hint |
+
+**Does NOT do:** Schema lookups. Field names remain as raw user text (`"camera"`, not `"camera_id"`).
+
+---
+
+### [resolver.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/semantic_resolver.py) — Semantic Resolver
+
+**Corresponds to**: Lucene `MultiFieldQueryNodeProcessor` + `PointQueryNodeProcessor` / SQLGlot `optimizer/qualify.py` + `optimizer/qualify_columns.py`
+
+```
+class SchemaContext:
+    fields: dict[str, FieldInfo]            # field_name → {type, collections}
+    collections: dict[str, CollectionInfo]  # fq_name → {fields, db}
+    concept_map: dict[str, str]             # "camera" → "camera_id" (auto-derived)
+
+    def __init__(self, schema: dict)        # Build everything from schema JSON
+
+class FieldInfo:
+    name: str
+    type: str               # "string" "float" "int" "object"
+    collections: list[str]  # which collections contain this field
+
+def resolve(ast: QueryRoot, ctx: SchemaContext) → QueryRoot
+```
+
+**Responsibilities:**
+- Walk the AST
+- For each node with a [field](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/compiler.py#472-474) attribute, resolve the raw name to a schema field
+- Resolution order: exact match → case-insensitive → concept+suffix → fuzzy
+- Suffix priority: `_id` > [_name](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/compiler.py#215-217) > `_code` > [_type](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/slot_extractor.py#410-413) > other
+- Set `node.meta["confidence"]` with match score
+- Infer `QueryRoot.collection` from resolved fields
+- All mappings auto-derived from schema at `SchemaContext.__init__` — **nothing hardcoded**
+
+---
+
+### `annotator.py` — Type Annotator
+
+**Corresponds to**: Lucene `PointQueryNodeProcessor` (type detection) / SQLGlot `optimizer/annotate_types.py`
+
+```
+def annotate_types(ast: QueryRoot, ctx: SchemaContext) → QueryRoot
+```
+
+**Responsibilities:**
+- Walk the AST
+- For each `ComparisonNode`, look up the resolved field's type from schema
+- Coerce `ValueNode` to match:
+
+| Field type | Value `"2024-01-15"` | Result |
+|---|---|---|
+| `float` | date string | `1705276800.0` (epoch) |
+| [int](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/compiler.py#189-201) | number string | `15` |
+| [string](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/compiler.py#447-449) | any | keep as-is |
+
+- Set `ValueNode.typed_value` and `ValueNode.inferred_type`
+
+---
+
+### `validator.py` — Validator
+
+**Corresponds to**: Lucene `AllowLeadingWildcardProcessor` / MongoDB security rules
+
+```
+def validate(ast: QueryRoot) → QueryRoot   # raises ValidationError on failure
+```
+
+**Responsibilities:**
+- Block dangerous operators (`$where`, `$function`, `$accumulator`)
+- Warn if any field resolution has confidence < 0.7
+- Enforce pipeline depth limits
+- Mark write operations (delete/update) as preview-only
+- Check that resolved fields exist in the target collection
+
+---
+
+### [compiler.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/compiler.py) — MongoDB Compiler
+
+**Corresponds to**: Lucene `QueryTreeBuilder` + per-node builders / SQLGlot `generator.py`
+
+```
+def compile(ast: QueryRoot) → dict
+```
+
+**Responsibilities:**
+- Walk the validated AST bottom-up
+- Dispatch on `QueryRoot.intent`:
+  - `"find"` → `{collection, operation, filter, sort, limit, projection}`
+  - `"count"` → `{collection, operation, pipeline: [{$match: ...}, {$count: ...}]}`
+  - `"aggregate"` → `{collection, operation, pipeline: [...]}`
+  - `"delete"` → `{collection, operation, filter, preview: True}`
+  - `"update"` → `{collection, operation, filter, update, preview: True}`
+- Compile each node type to its MongoDB equivalent:
+
+| Node | MongoDB output |
+|---|---|
+| `ComparisonNode("camera_id", "$eq", "CAM001")` | `{"camera_id": "CAM001"}` |
+| `ComparisonNode("duration", "$gt", 300)` | `{"duration": {"$gt": 300}}` |
+| `LogicalNode("$and", [a, b])` | `{"$and": [compile(a), compile(b)]}` |
+| `GroupNode("camera_id", "$count")` | `{"$group": {"_id": "$camera_id", "count": {"$sum": 1}}}` |
+| [SortNode("count", -1)](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#104-113) | `{"$sort": {"count": -1}}` |
+| [LimitNode(5)](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#115-121) | `{"$limit": 5}` |
+
+**Does NOT do:** Any resolution or type checking — by this point, the AST is fully resolved and typed.
+
+---
+
+### [__init__.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/__init__.py) — Public API
+
+**Corresponds to**: Lucene `QueryParserHelper.parse()` / SQLGlot `sqlglot.transpile()`
+
+```
+def parse_query(nl_text: str, schema: dict) → dict:
+    ctx       = SchemaContext(schema)
+    tokens    = tokenize(nl_text)
+    ast       = parse(tokens)
+    ast       = resolve(ast, ctx)
+    ast       = annotate_types(ast, ctx)
+    ast       = validate(ast)
+    return compile(ast)
+```
+
+6 lines. Each line is one pipeline stage. Each stage is a pure function.
+
+---
+
+## Data Flow Diagram
+
+```
+"Show top 5 cameras with most events after Jan 2024"
+                    │
+          ┌─────────▼──────────┐
+          │    tokenize()      │  tokens.py
+          │  No schema needed  │
+          └─────────┬──────────┘
+                    │ list[Token]
+          ┌─────────▼──────────┐
+          │     parse()        │  parser.py
+          │  No schema needed  │
+          └─────────┬──────────┘
+                    │ QueryRoot (field="camera", value="Jan 2024")
+          ┌─────────▼──────────┐
+          │    resolve()       │  resolver.py
+          │  Uses: SchemaCtx   │
+          └─────────┬──────────┘
+                    │ QueryRoot (field="camera_id", collection="cycle_events.events")
+          ┌─────────▼──────────┐
+          │ annotate_types()   │  annotator.py
+          │  Uses: SchemaCtx   │
+          └─────────┬──────────┘
+                    │ QueryRoot (value=1704067200.0, type="float")
+          ┌─────────▼──────────┐
+          │   validate()       │  validator.py
+          │  Safety checks     │
+          └─────────┬──────────┘
+                    │ QueryRoot (validated, safe)
+          ┌─────────▼──────────┐
+          │    compile()       │  compiler.py
+          │  Pure serialization│
+          └─────────┬──────────┘
+                    │
+                    ▼
+          {collection, operation, pipeline, ...}
+```

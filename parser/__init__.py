@@ -1,15 +1,43 @@
-from .parser_engine import NLQueryParser
+"""NL-to-MongoDB parser package init."""
 
-_parser_instance = None
+from .ast_nodes import (
+    ComparisonNode,
+    GroupNode,
+    LimitNode,
+    LogicalNode,
+    ProjectionNode,
+    QueryNode,
+    QueryRoot,
+    SortNode,
+    UpdateNode,
+    ValueNode,
+)
+from .compiler import CompileError, compile
+from .parser import NLParser, ast_to_dict, parse
+from .pipeline import QueryPipeline, parse_query
+from .preprocessor import preprocess
+from .resolver import ResolutionError, SchemaContext, resolve
 
-
-def parse_query(nl_query: str, schema: dict) -> dict:
-    global _parser_instance
-
-    if not nl_query or not nl_query.strip():
-        raise ValueError("Query string cannot be empty")
-
-    if _parser_instance is None or _parser_instance._schema != schema:
-        _parser_instance = NLQueryParser(schema)
-
-    return _parser_instance.parse(nl_query)
+__all__ = [
+    "compile",
+    "CompileError",
+    "parse_query",
+    "QueryPipeline",
+    "preprocess",
+    "parse",
+    "NLParser",
+    "ast_to_dict",
+    "SchemaContext",
+    "resolve",
+    "ResolutionError",
+    "QueryRoot",
+    "ComparisonNode",
+    "LogicalNode",
+    "GroupNode",
+    "SortNode",
+    "LimitNode",
+    "ProjectionNode",
+    "UpdateNode",
+    "ValueNode",
+    "QueryNode",
+]

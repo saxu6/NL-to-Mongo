@@ -1,0 +1,307 @@
+# Lucene & SQLGlot — Compiler Architecture Analysis
+
+## 1. Lucene Flexible QueryParser
+
+### The 3-Phase Pipeline
+
+Lucene's `QueryParserHelper.parse()` method reveals the canonical architecture in ~10 lines:
+
+```java
+public Object parse(String query, String defaultField) {
+    // Phase 1: Text → QueryNode tree
+    QueryNode queryTree = getSyntaxParser().parse(query, defaultField);
+
+    // Phase 2: Transform the tree through processors  
+    if (processor != null) {
+        queryTree = processor.process(queryTree);
+    }
+
+    // Phase 3: Build final Query object from processed tree
+    return getQueryBuilder().build(queryTree);
+}
+```
+
+All three components — `SyntaxParser`, `QueryNodeProcessor`, [QueryBuilder](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/query_builder.py#85-901) — are **pluggable interfaces** set via constructor injection. The helper itself is just an orchestrator.
+
+---
+
+### Phase 1: Parsing → QueryNode Tree
+
+The `StandardSyntaxParser` (generated from a JavaCC grammar) converts raw text into a **QueryNode tree**. QueryNodes are not query objects — they are **syntax-level representations**.
+
+```
+"title:hello AND body:world"
+
+          ┌─────────────┐
+          │  BooleanNode │  (AND)
+          └──────┬──────┘
+           ┌─────┴─────┐
+    ┌──────┴──────┐  ┌──┴───────────┐
+    │ FieldNode   │  │ FieldNode    │
+    │ field=title │  │ field=body   │
+    │ text=hello  │  │ text=world   │
+    └─────────────┘  └──────────────┘
+```
+
+Key design: **the parser knows nothing about the schema, field types, or query semantics**. It only produces a syntactically valid tree.
+
+---
+
+### Phase 2: Processor Pipeline
+
+`StandardQueryNodeProcessorPipeline` chains **21 processors** in a fixed, order-dependent sequence:
+
+```java
+add(new WildcardQueryNodeProcessor());        // Rewrite wildcard patterns
+add(new MultiFieldQueryNodeProcessor());      // Expand to multiple fields
+add(new FuzzyQueryNodeProcessor());           // Handle fuzzy search ~N
+add(new RegexpQueryNodeProcessor());          // Handle regex patterns
+add(new MatchAllDocsQueryNodeProcessor());    // Handle *:*
+add(new OpenRangeQueryNodeProcessor());       // Handle [* TO value]
+add(new PointQueryNodeProcessor());           // Convert numerics to PointQuery nodes
+add(new PointRangeQueryNodeProcessor());      // Convert numeric ranges
+add(new TermRangeQueryNodeProcessor());       // Convert text ranges
+add(new AllowLeadingWildcardProcessor());     // Validate leading wildcards
+add(new AnalyzerQueryNodeProcessor());        // Run text analysis (tokenization, stemming)
+add(new PhraseSlopQueryNodeProcessor());      // Handle "phrase"~2
+add(new BooleanQuery2ModifierNodeProcessor());// Normalize boolean logic
+add(new NoChildOptimizationQueryNodeProcessor());  // Remove empty branches
+add(new RemoveDeletedQueryNodesProcessor());       // Clean up deleted nodes
+add(new RemoveEmptyNonLeafQueryNodeProcessor());   // Clean up empty parents
+add(new BooleanSingleChildOptimizationQueryNodeProcessor()); // Simplify single-child booleans
+add(new DefaultPhraseSlopQueryNodeProcessor());    // Apply default slop
+add(new BoostQueryNodeProcessor());                // Apply boost factors
+add(new MultiTermRewriteMethodProcessor());        // Set rewrite strategy
+add(new IntervalQueryNodeProcessor());             // Handle interval queries
+```
+
+Each processor implements a **tree visitor** with `preProcessNode()` and `postProcessNode()` callbacks:
+
+```
+Tree walk order for:      a
+                         / \
+                        b   e
+                       / \
+                      c   d
+
+→ preProcessNode(a)
+  → preProcessNode(b)
+    → preProcessNode(c)
+    → postProcessNode(c)
+    → preProcessNode(d)
+    → postProcessNode(d)
+    → setChildrenOrder(b.children)     ← can reorder/remove children
+  → postProcessNode(b)
+  → preProcessNode(e)
+  → postProcessNode(e)
+  → setChildrenOrder(a.children)
+→ postProcessNode(a)
+```
+
+> [!IMPORTANT]
+> **Each processor sees the tree that the PREVIOUS processor produced.** The output of processor N is the input to processor N+1. This is the classic **multi-pass compiler** design — each pass handles one concern.
+
+Processors can:
+- **Replace** nodes (e.g., WildcardQueryNodeProcessor replaces FieldNode → WildcardQueryNode)
+- **Remove** nodes (processors mark nodes as deleted, then RemoveDeletedProcessor cleans up)
+- **Expand** nodes (MultiFieldProcessor expands a single field to a BooleanNode of multiple fields)
+- **Annotate** nodes (PointQueryNodeProcessor adds type metadata from the config)
+- **Reorder** children (via `setChildrenOrder()`)
+- **Read config** (via `QueryConfigHandler` — field types, analyzers, default operator, etc.)
+
+---
+
+### Phase 3: Query Building
+
+`StandardQueryTreeBuilder` walks the processed tree and creates Lucene [Query](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#123-148) objects. Each QueryNode type has a registered builder:
+
+```
+FieldQueryNode         → TermQueryBuilder         → TermQuery
+BooleanQueryNode       → BooleanQueryBuilder      → BooleanQuery
+PointQueryNode         → PointQueryBuilder        → IntPoint.newExactQuery()
+TermRangeQueryNode     → TermRangeQueryBuilder     → TermRangeQuery
+```
+
+The builder is a **dispatcher** — it looks up the node type and delegates to the registered builder for that type.
+
+---
+
+## 2. SQLGlot
+
+### The 4-Phase Pipeline
+
+```
+SQL string
+    ↓ parse()
+Expression AST      ← dialect-specific tokenizer + parser
+    ↓ optimize()    
+Optimized AST       ← 14 ordered rule functions (schema-aware)
+    ↓ generate()
+SQL string          ← dialect-specific generator
+```
+
+### Phase 1: Parsing → Expression AST
+
+SQLGlot has a **hand-written recursive descent parser** (not grammar-generated). Each SQL dialect plugs in with a `Dialect` class that configures:
+- Token definitions (operator chars, keywords, type mappings)
+- Parser overrides (dialect-specific syntax rules)
+- Generator overrides (dialect-specific SQL generation)
+
+The parse produces a tree of [Expression](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#79-85) nodes. Every node type is a Python class:
+
+```python
+class Column(Expression):
+    arg_types = {"this": True, "table": False}
+
+class Select(Expression):
+    arg_types = {"expressions": True, "from": False, "where": False, ...}
+```
+
+Key design: **there is ONE unified AST for ALL dialects** — the AST represents the _superset_ of SQL. Dialect differences are handled in the parser and generator, never in the AST.
+
+### Phase 2: Optimizer (= Processor Pipeline)
+
+`optimizer.py` defines **14 rule functions** executed in order:
+
+```python
+RULES = (
+    qualify,              # Resolve table/column references using schema
+    pushdown_projections, # Only select needed columns
+    normalize,            # Normalize boolean expressions (CNF/DNF)
+    unnest_subqueries,    # Convert subqueries to joins where possible
+    pushdown_predicates,  # Push WHERE conditions closer to data
+    optimize_joins,       # Reorder JOIN clauses
+    eliminate_subqueries, # Remove redundant subqueries
+    merge_subqueries,     # Merge compatible subqueries
+    eliminate_joins,       # Remove unused JOINs
+    eliminate_ctes,        # Remove unused CTEs
+    quote_identifiers,    # Add proper quoting
+    annotate_types,        # Infer column types from schema
+    canonicalize,          # Standardize function names, types
+    simplify,              # Constant folding, dead code elimination
+)
+```
+
+Each rule is a **pure function**: `tree_in → tree_out`. The optimizer loops through them:
+
+```python
+for rule in rules:
+    rule_kwargs = {param: possible_kwargs[param] for param in rule_params ...}
+    optimized = rule(optimized, **rule_kwargs)
+```
+
+Rules receive context (schema, dialect, catalog) via kwargs. This is how `annotate_types` knows that column `Z` is a `STRING` — it reads the schema.
+
+### Phase 3: Tree Mutation
+
+SQLGlot provides 3 mutation APIs:
+1. **High-level builders**: `select.where("x = 1").from_("y")` — ORM-style fluent API
+2. **Low-level builders**: `node.set("expressions", [...])`, `node.append(...)` — direct arg mutation
+3. **Transform**: depth-first pre-order map function — `tree.transform(fn)` applies `fn` to every node
+
+### Phase 4: Code Generation
+
+Each dialect provides a `Generator` class that walks the AST and emits SQL text. Generators are also **visitors** — each Expression type has a corresponding `generate_*` method.
+
+---
+
+## 3. The General Architecture
+
+Both systems implement the same fundamental compiler pipeline:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      TEXT INPUT                          │
+└──────────────────────────┬──────────────────────────────┘
+                           │
+                    ┌──────▼──────┐
+                    │   PARSER    │  Syntax-only. No schema knowledge.
+                    │             │  Produces untyped, unresolved tree.
+                    └──────┬──────┘
+                           │
+                    ┌──────▼──────┐
+                    │  AST NODES  │  Typed node classes with args.
+                    │             │  Parent/child references.
+                    │             │  Superset of all possible queries.
+                    └──────┬──────┘
+                           │
+              ┌────────────▼────────────────┐
+              │   PROCESSOR PIPELINE        │
+              │                             │
+              │   Processor 1: Resolve      │  ← Schema/config injection
+              │   Processor 2: Validate     │
+              │   Processor 3: Normalize    │
+              │   Processor 4: Optimize     │
+              │   Processor 5: Annotate     │  ← Type inference
+              │   Processor 6: Simplify     │
+              │   ...                       │
+              │                             │
+              │   Each: tree_in → tree_out  │
+              │   Order matters!            │
+              └────────────┬────────────────┘
+                           │
+                    ┌──────▼──────┐
+                    │  BUILDER /  │  Dispatches on node type.
+                    │  GENERATOR  │  Produces target output.
+                    └─────────────┘
+```
+
+### Shared Design Principles
+
+| Principle | Lucene | SQLGlot | Implication for our system |
+|---|---|---|---|
+| **Parser is dumb** | JavaCC grammar, produces unresolved FieldNodes | Recursive descent, produces raw Expression tree | Our Lark grammar should only produce syntax nodes — no schema lookups during parsing |
+| **AST is universal** | QueryNode hierarchy covers all Lucene query types | Expression hierarchy covers all SQL dialects | Our AST should cover all possible MongoDB operations — find, aggregate, update, delete |
+| **Processors are ordered passes** | 21 processors, each handles one concern | 14 rules, each a pure function | Our semantic processing should be a **chain of independent passes**, not one monolithic function |
+| **Schema is injected, not hardcoded** | QueryConfigHandler provides field types, analyzers | Schema dict passed to optimizer, used by `qualify` and `annotate_types` | Schema flows through as context — never hardcoded in code |
+| **Builder dispatches on node type** | Map of NodeType → BuilderClass | Generator methods keyed by Expression type | Our final MongoDB query builder should dispatch on AST node type |
+
+### Critical Insight: Separation of Concerns
+
+```
+                  Lucene                       SQLGlot                    Our system should do
+                  ──────                       ───────                    ────────────────────
+Parser:           Syntax only                  Syntax only                Syntax only (Lark grammar)
+Resolve:          MultiFieldProcessor          qualify rule               Resolve fields/collections from schema
+Type annotate:    PointQueryNodeProcessor      annotate_types rule        Coerce values based on schema field types  
+Normalize:        BooleanQuery2ModifierProcessor  normalize rule          Normalize boolean/comparison expressions
+Validate:         AllowLeadingWildcardProcessor   (parse errors)         Validate security (block $where etc.)
+Optimize:         SingleChildOptimization      simplify, merge rules     Simplify redundant nodes
+Clean up:         RemoveDeletedNodes           eliminate_* rules         Remove empty/dead branches
+Build:            StandardQueryTreeBuilder     Generator                  Emit MongoDB query dict
+```
+
+> [!IMPORTANT]
+> **What our current system gets wrong**: We mix parsing, resolution, type coercion, validation, and building into one monolithic [compiler.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/compiler.py) Transformer. Both Lucene and SQLGlot prove that the correct architecture is: parse into unresolved AST → run N independent processor passes → build output from processed AST.
+
+---
+
+## 4. What This Means for NL-to-Mongo
+
+The general pattern extracted from both systems:
+
+```
+NL text
+  ↓
+[1] LEXER/PARSER (Lark grammar)       → Raw QueryNode tree (unresolved)
+  ↓  
+[2] PASS: Collection Resolution        → Annotate tree with collection
+  ↓
+[3] PASS: Field Resolution             → Resolve natural language → schema fields
+  ↓
+[4] PASS: Type Annotation              → Use schema types to annotate value nodes
+  ↓
+[5] PASS: Type Coercion                → Convert date strings → epoch for float fields
+  ↓
+[6] PASS: Intent Classification        → Detect count/aggregate/ranking/CRUD intents
+  ↓
+[7] PASS: Domain Expansion             → Expand domain concepts using config (not hardcode)
+  ↓
+[8] PASS: Validation                   → Block dangerous ops ($where), check field existence
+  ↓
+[9] PASS: Simplification               → Remove redundant nodes, merge conditions
+  ↓
+[10] BUILDER                           → Walk processed tree → emit MongoDB query dict
+```
+
+Each pass is a **pure function** that receives the tree + schema context and returns a modified tree. The passes are ordered. The schema is never hardcoded — it flows through as an argument.

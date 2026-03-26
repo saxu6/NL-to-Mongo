@@ -1,58 +1,70 @@
-import sys
-import os
 import json
+import unittest
+from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from parser.tokenizer import Tokenizer, extract_schema_fields
-from parser.ast_nodes import ASTBuilder, QueryNode
-from parser.grammar import GrammarMatcher
-from parser.query_builder import MongoQueryBuilder
-from parser.parser_engine import NLQueryParser
 from parser import parse_query
 
-with open("full_schema.json", "r") as f:
-        schema = json.load(f)
-    print(f"schema loaded with {len(schema)} databases")
-except Exception as e:
-    print(f"schema not loaded: {e}")
-    schema = None
 
-try:
-    if schema:
-        fields = extract_schema_fields(schema)
-        print(f"  Schema fields found: {len(fields)}")
-        print(f"  Sample fields: {list(fields)[:10]}")
-        tok = Tokenizer(schema_fields=fields)
+SCHEMA_PATH = Path(__file__).resolve().parent / "full_schema.json"
+with SCHEMA_PATH.open("r", encoding="utf-8") as handle:
+    SCHEMA = json.load(handle)
 
-        # input here 
-        tokens = tok.tokenize("Find events where camera_id is 'CAM001'")
-        print(f"  Tokens: {len(tokens)}")
-        for t in tokens:
-            print(f"    {t}")
-except Exception as e:
-    print(f"  FAIL: {e}")
-    import traceback; traceback.print_exc()
 
-try:
-    if schema:
-        builder = ASTBuilder()
+class ParserPipelineTests(unittest.TestCase):
 
-        # input here
-        ast = builder.build(tokens, raw_query="Find events where camera_id is 'CAM001'")
-        print(f"  AST intent: {ast.intent}")
-        print(f"  AST children: {ast.child_count}")
-        print(f"  Has filter: {ast.has_filter}")
-        if ast.collection:
-            print(f"  Collection: {ast.collection.fully_qualified}")
-except Exception as e:
-    print(f"  FAIL: {e}")
-    import traceback; traceback.print_exc()
+    def test_basic_filter(self) -> None:
+        result = parse_query("show events where up_event_duration > 30")
 
-try:
-    if schema:
-        # input here
-        result = parse_query("Find events where camera_id is 'CAM001'", schema)
-        print(f"  Result: {json.dumps(result, indent=2)}")
-except Exception as e:
-    print(f"  FAIL: {e}")
-    import traceback; traceback.print_exc()
+        self.assertEqual(result["collection"], "cycle_events.events")
+        self.assertEqual(result["operation"], "find")
+        self.assertEqual(result["filter"], {"up_event_duration": {"$gt": 30.0}})
+
+    def test_logical_and_sort_limit(self) -> None:
+        result = parse_query(
+            "show events where camera is CAM001 and duration greater than 10 "
+            "sort by up_event_start desc limit 5"
+        )
+
+        self.assertEqual(result["collection"], "cycle_events.events")
+        self.assertEqual(result["operation"], "find")
+        self.assertEqual(
+            result["filter"],
+            {
+                "$and": [
+                    {"camera_id": "CAM001"},
+                    {"up_event_duration": {"$gt": 10.0}},
+                ]
+            },
+        )
+        self.assertEqual(result["sort"], {"up_event_start": -1})
+        self.assertEqual(result["limit"], 5)
+
+    def test_logical_or(self) -> None:
+        result = parse_query("show events where camera is CAM001 or camera is CAM002")
+
+        self.assertEqual(
+            result["filter"],
+            {"$or": [{"camera_id": "CAM001"}, {"camera_id": "CAM002"}]},
+        )
+
+    def test_count_intent(self) -> None:
+        result = parse_query("count events where camera is CAM001")
+
+        self.assertEqual(result["collection"], "cycle_events.events")
+        self.assertEqual(result["operation"], "countDocuments")
+        self.assertEqual(result["filter"], {"camera_id": "CAM001"})
+
+    def test_backward_compatible_schema_arg(self) -> None:
+        result = parse_query("show events where camera is CAM001", schema=SCHEMA)
+
+        self.assertEqual(result["collection"], "cycle_events.events")
+        self.assertEqual(result["filter"], {"camera_id": "CAM001"})
+
+    def test_empty_query_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_query("   ")
+
+
+if __name__ == "__main__":
+    unittest.main()
+

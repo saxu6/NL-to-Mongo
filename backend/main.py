@@ -1,10 +1,14 @@
+from contextlib import asynccontextmanager
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
+from fastapi.staticfiles import StaticFiles
 
-from routes import query
-from database import connect_to_mongo, close_mongo_connection
-from config import settings
+from backend.config import settings
+from backend.database import close_mongo_connection, connect_to_mongo
+from backend.routes import chat, query
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -12,11 +16,12 @@ async def lifespan(app: FastAPI):
     yield
     close_mongo_connection()
 
+
 app = FastAPI(
     title="NL to MongoDB API",
     description="Natural Language to MongoDB Query Converter",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -28,12 +33,15 @@ app.add_middleware(
 )
 
 app.include_router(query.router, prefix=settings.API_V1_PREFIX, tags=["queries"])
+app.include_router(chat.router, prefix=settings.API_V1_PREFIX, tags=["chat"])
 
-@app.get("/")
-def root():
-    return {"message": "NL to MongoDB API is running"}
 
 @app.get("/health")
 def health():
     return {"status": "healthy"}
 
+
+# Serve frontend static files (catch-all mount; keep this last).
+frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
+if frontend_dir.is_dir():
+    app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")

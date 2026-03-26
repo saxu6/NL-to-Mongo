@@ -1,0 +1,204 @@
+# Lucene & SQLGlot — File-Level Architecture Map
+
+## Lucene: `queryparser/flexible/`
+
+The queryparser lives under two packages: [core/](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/query_builder.py#370-425) (framework) and `standard/` (Lucene-specific implementation).
+
+### Orchestration
+
+| File | Role | What it does |
+|---|---|---|
+| `core/QueryParserHelper.java` | **Pipeline orchestrator** | Chains parser → processor → builder in a 3-line [parse()](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/parser_engine.py#67-123) method. Holds references to all three components. All are pluggable via setters. |
+
+---
+
+### Parsing (text → token stream → QueryNode tree)
+
+| File | Role | What it does |
+|---|---|---|
+| `standard/parser/StandardSyntaxParser.jj` | **Grammar definition** | JavaCC grammar file. Defines the Lucene query syntax: `field:value`, `AND`/`OR`, ranges `[a TO z]`, fuzzy `term~2`, wildcards `term*`, phrases `"foo bar"`. This is the **source of truth** for what text the parser accepts. |
+| `standard/parser/StandardSyntaxParser.java` | **Generated parser** | Auto-generated from `.jj` by JavaCC. Hand-editing this file is forbidden — edit the `.jj` instead. Produces [QueryNode](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#123-148) trees from text. |
+| `standard/parser/StandardSyntaxParserTokenManager.java` | **Generated tokenizer** | Auto-generated lexer. Converts character stream → token stream using the token rules from `.jj`. |
+| `standard/parser/Token.java` | **Token data structure** | Generated token class with `kind` (token type), `image` (text), `beginLine`, `beginColumn`. |
+| `standard/parser/ParseException.java` | **Parse error** | Thrown when input text doesn't match the grammar. |
+| `standard/parser/EscapeQuerySyntaxImpl.java` | **Escaping utility** | Handles special character escaping for Lucene query syntax. |
+| `core/parser/SyntaxParser.java` | **Parser interface** | [parse(String query, String defaultField) → QueryNode](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/parser_engine.py#67-123). Any parser implementation must implement this. |
+
+**Takeaway**: The parser is fully generated from a grammar file. It knows nothing about schema, field types, or semantics. It only produces unresolved syntax nodes.
+
+---
+
+### AST Node Definitions (the tree structure)
+
+All files in `core/nodes/`. Each file = one node type.
+
+| File | AST role | What it represents |
+|---|---|---|
+| `QueryNode.java` | **Base interface** | `getChildren()`, `getParent()`, `isLeaf()`, `getTag()/setTag()`, `cloneTree()`. Tags are a `Map<String,Object>` — processors annotate nodes by setting tags. |
+| `QueryNodeImpl.java` | **Base implementation** | Default implementation of QueryNode. Manages children list, parent reference, and tag map. |
+| `FieldQueryNode.java` | **Field:value pair** | Represents `field:value`. Has [field](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/compiler.py#472-474), `begin`, [end](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/frontend/app.js#129-152), [text](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/slot_extractor.py#281-299) attributes. Most common leaf node. |
+| `FieldableNode.java` | **Fieldable interface** | Interface for any node that has a field name. Used by builders to dispatch on field. |
+| `FieldValuePairQueryNode.java` | **Generic field=value** | Interface for field-value pair nodes (key-value semantics). |
+| `BooleanQueryNode.java` | **Boolean container** | Parent node for AND/OR clauses. Children are the boolean operands. |
+| `AndQueryNode.java` | **AND** | `BooleanQueryNode` subclass for explicit AND. |
+| `OrQueryNode.java` | **OR** | `BooleanQueryNode` subclass for explicit OR. |
+| `ModifierQueryNode.java` | **+/- modifier** | Wraps a child with MUST (+) or MUST_NOT (-) modifier. |
+| `GroupQueryNode.java` | **Parentheses** | Wraps a child in [(...)](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/frontend/app.js#18-23) grouping. |
+| `BoostQueryNode.java` | **Boost ^N** | Wraps a child with a boost factor. |
+| `FuzzyQueryNode.java` | **Fuzzy ~N** | FieldQueryNode subclass for fuzzy matching. |
+| `RangeQueryNode.java` | **Range [a TO z]** | Generic range with lower/upper bounds and inclusive/exclusive flags. |
+| `QuotedFieldQueryNode.java` | **Phrase "..."** | FieldQueryNode subclass for quoted-phrase queries. |
+| `TokenizedPhraseQueryNode.java` | **Analyzed phrase** | Created by AnalyzerProcessor after tokenizing a phrase. |
+| `SlopQueryNode.java` | **Phrase slop ~N** | Wraps a phrase with a proximity slop value. |
+| `MatchAllDocsQueryNode.java` | **\*:\*** | Matches all documents. |
+| `MatchNoDocsQueryNode.java` | **Match nothing** | Matches zero documents. |
+| `DeletedQueryNode.java` | **Tombstone** | Marker node — processors set this to mark a node for removal. `RemoveDeletedQueryNodesProcessor` cleans these up. |
+| `NoTokenFoundQueryNode.java` | **Empty analysis result** | Created when the analyzer produces zero tokens from input text. |
+| `OpaqueQueryNode.java` | **Opaque blob** | Holds opaque data for extension nodes. |
+| `PathQueryNode.java` | **Hierarchical path** | Represents a path-like query (e.g., taxonomy). |
+
+**Takeaway**: ~22 node types. Each is a simple data holder. Nodes carry **no business logic** — all logic lives in processors and builders. The tag system (`setTag`/`getTag`) lets processors attach metadata without changing the node class.
+
+---
+
+### Tree Transformation (processors)
+
+`core/processors/` has the framework. `standard/processors/` has the Lucene-specific chain.
+
+| File | Role | What it does |
+|---|---|---|
+| `core/processors/QueryNodeProcessor.java` | **Processor interface** | `process(QueryNode tree) → QueryNode`. Single method. |
+| `core/processors/QueryNodeProcessorImpl.java` | **Tree walker base** | Abstract class. Walks the tree left-to-right, calling `preProcessNode()` and `postProcessNode()` for each node. Subclasses override these methods. |
+| `core/processors/QueryNodeProcessorPipeline.java` | **Processor chain** | `List<QueryNodeProcessor>`. Runs each processor in order: output of processor N is input to N+1. |
+| `core/processors/NoChildOptimizationQueryNodeProcessor.java` | **Dead branch removal** | Removes nodes that have no children (became empty after processing). |
+| `core/processors/RemoveDeletedQueryNodesProcessor.java` | **Tombstone cleanup** | Removes all `DeletedQueryNode` instances from the tree. |
+| `standard/processors/StandardQueryNodeProcessorPipeline.java` | **The actual chain** | Creates and orders all 21 processors. This is the "main" of the processing stage. |
+| `standard/processors/WildcardQueryNodeProcessor.java` | **Wildcard handling** | Converts `FieldQueryNode("term*")` → `WildcardQueryNode`. |
+| `standard/processors/MultiFieldQueryNodeProcessor.java` | **Multi-field expansion** | If no field specified, expands to search across all configured default fields. |
+| `standard/processors/FuzzyQueryNodeProcessor.java` | **Fuzzy defaults** | Sets default fuzziness parameters. |
+| `standard/processors/AnalyzerQueryNodeProcessor.java` | **Text analysis** | Runs the configured Analyzer (tokenization, stemming, lowercasing) on text values. This is where `"Running"` becomes `"run"`. |
+| `standard/processors/PointQueryNodeProcessor.java` | **Numeric detection** | Checks if a field is configured as numeric → converts FieldQueryNode to PointQueryNode. This is **type annotation** — it reads field types from config. |
+| `standard/processors/TermRangeQueryNodeProcessor.java` | **Range handling** | Validates and processes text range queries. |
+| `standard/processors/BooleanQuery2ModifierNodeProcessor.java` | **Boolean normalization** | Converts between AND/OR and +/- modifier representations. |
+| `standard/processors/BoostQueryNodeProcessor.java` | **Boost application** | Applies boost factors from config. |
+| `standard/processors/AllowLeadingWildcardProcessor.java` | **Validation** | Blocks leading wildcards (`*term`) unless explicitly allowed in config. This is a **safety gate**. |
+
+**Takeaway**: Each processor does ONE thing. The pipeline applies them in a specific order. Processors read schema/config from `QueryConfigHandler` — they never hardcode field knowledge. The pattern is: `tree_in → walk → modify nodes → tree_out`.
+
+---
+
+### Query Building (processed tree → Lucene Query objects)
+
+| File | Role | What it does |
+|---|---|---|
+| `core/builders/QueryBuilder.java` | **Builder interface** | [build(QueryNode node) → Object](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#167-180). Single method. |
+| `core/builders/QueryTreeBuilder.java` | **Builder dispatcher** | Walks the processed tree bottom-up. For each node, looks up a registered builder by: (1) field name, (2) node class, (3) parent class/interface chain. Children are built before parents. The built object is stored on the node via `setTag(QUERY_TREE_BUILDER_TAGID, obj)`. |
+| `standard/builders/StandardQueryTreeBuilder.java` | **Standard builder** | Registers all Lucene-specific builders (maps node types to builder classes). |
+| `standard/builders/StandardQueryBuilder.java` | **Builder interface** | Specialization: [build(QueryNode) → Query](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#167-180) (returns Lucene [Query](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#123-148)). |
+
+Individual builders per node type (in `standard/builders/`):
+
+| Builder | Node → | Output |
+|---|---|---|
+| `TermQueryBuilder` | `FieldQueryNode` → | `TermQuery` |
+| `BooleanQueryBuilder` | `BooleanQueryNode` → | `BooleanQuery` |
+| `PhraseQueryBuilder` | `TokenizedPhraseQueryNode` → | `PhraseQuery` |
+| `PointQueryBuilder` | `PointQueryNode` → | `IntPoint.newExactQuery()` |
+| `TermRangeQueryBuilder` | `TermRangeQueryNode` → | `TermRangeQuery` |
+| `FuzzyQueryBuilder` | `FuzzyQueryNode` → | `FuzzyQuery` |
+
+**Takeaway**: The builder is a lookup table: `{NodeType → BuilderClass}`. It's mechanical — by the time the builder runs, every node is fully resolved and typed.
+
+---
+
+## SQLGlot: `sqlglot/`
+
+### Tokenization
+
+| File | Role | What it does |
+|---|---|---|
+| `tokens.py` | **Token type definitions** | [TokenType](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/legacy/tokenizer.py#9-17) enum: `SELECT`, `FROM`, `WHERE`, `AND`, `OR`, `NUMBER`, `STRING`, `IDENTIFIER`, etc. ~200 token types covering all SQL dialects. |
+| `tokenizer_core.py` | **Tokenizer engine** | Character-by-character lexer. Converts SQL string → `list[Token]`. Handles keywords, identifiers, strings, numbers, operators. Dialect-configurable via keyword maps and special character sets. |
+
+### Parsing
+
+| File | Role | What it does |
+|---|---|---|
+| [parser.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/test_parser.py) | **Core parser** | ~7000-line **hand-written recursive descent parser**. Contains methods like `_parse_select()`, `_parse_from()`, `_parse_where()`, `_parse_expression()`. Each method consumes tokens and produces Expression nodes. Not generated from a grammar — hand-tuned for SQL semantics and error recovery. |
+| `parser_core.py` | **Parser utilities** | Lower-level parsing infrastructure shared across parser implementations. |
+| `parsers/` | **Dialect-specific parsers** | Subfolders for dialect-specific parsing overrides. Each dialect can override specific parse methods. |
+
+### AST Nodes
+
+| File | Role | What it does |
+|---|---|---|
+| `expressions/` (directory) | **All AST node types** | ~200+ Expression subclasses. Each defines `arg_types` dict specifying required/optional children. Examples: `Select`, `From`, `Where`, [Column](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/frontend/app.js#212-221), [Table](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/frontend/app.js#182-211), `Literal`, `Add`, `Sub`, `And`, `Or`, `Alias`, `Join`, `Subquery`, `Aggregate`, `Window`, `Case`, `Between`, [In](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/frontend/app.js#91-95), `Like`, `Order`, [Limit](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#115-121), `Group`, etc. |
+
+Key design: **one universal AST for ALL SQL dialects**. There is no "MySQL Select" vs "Postgres Select" — just `Select`. Dialect differences are handled in parsers and generators, never in node types.
+
+Every Expression has:
+- `args`: dict of children (keys defined by `arg_types`)
+- `parent`: reference to parent node
+- `this`, `expression`, `expressions`: convenience accessors
+- [find()](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/query_builder.py#195-214), `find_all()`: walk methods
+- `transform()`: map function over all descendants
+
+### Tree Transformations (optimizer)
+
+| File | Role | What it does |
+|---|---|---|
+| `optimizer/optimizer.py` | **Rule chain runner** | Loops through rules, applying each to the AST in order. Each rule receives schema/dialect context via kwargs. |
+| `optimizer/qualify.py` | **Name resolution** | Combines `qualify_tables` + `qualify_columns`. Resolves bare names to fully qualified `catalog.db.table.column`. This is the **semantic resolver** — it uses the schema. |
+| `optimizer/qualify_tables.py` | **Table resolution** | Resolves table references against the schema. Adds db/catalog prefixes. |
+| `optimizer/qualify_columns.py` | **Column resolution** | Resolves column references — figures out which table each column belongs to. Handles `SELECT *` expansion. |
+| `optimizer/annotate_types.py` | **Type annotation** | Infers the data type of every expression using schema column types. Propagates types through operations (e.g., `INT + INT → INT`). |
+| `optimizer/normalize.py` | **Boolean normalization** | Converts boolean expressions to CNF or DNF form. |
+| `optimizer/simplify.py` | **Constant folding + simplification** | Evaluates constant expressions (`1 + 1 → 2`), removes dead code (`WHERE 1 = 1`), simplifies boolean logic. |
+| `optimizer/pushdown_predicates.py` | **Predicate pushdown** | Moves WHERE conditions closer to the data source (into subqueries/joins). |
+| `optimizer/pushdown_projections.py` | **Projection pushdown** | Removes unused columns from inner queries. |
+| `optimizer/eliminate_joins.py` | **Dead join removal** | Removes JOINs whose results are never used. |
+| `optimizer/eliminate_ctes.py` | **Dead CTE removal** | Removes WITH clauses that are never referenced. |
+| `optimizer/eliminate_subqueries.py` | **Subquery elimination** | Removes redundant subquery wrapping. |
+| `optimizer/merge_subqueries.py` | **Subquery merging** | Combines compatible nested subqueries into a single query. |
+| `optimizer/unnest_subqueries.py` | **Subquery → JOIN conversion** | Converts correlated subqueries to JOINs where possible. |
+| `optimizer/optimize_joins.py` | **Join reordering** | Reorders JOINs for efficiency. |
+| `optimizer/resolver.py` | **Resolver utilities** | Helper functions for name resolution. |
+| `optimizer/scope.py` | **Scope tracking** | Tracks scope boundaries (subqueries, CTEs). Determines which tables/columns are visible at each point in the AST. This is the equivalent of a compiler's symbol table. |
+| `optimizer/canonicalize.py` | **Standardization** | Standardizes function names, type names, and syntax across dialects. |
+| `optimizer/normalize_identifiers.py` | **Identifier normalization** | Normalizes casing and quoting of identifiers. |
+
+### Code Generation
+
+| File | Role | What it does |
+|---|---|---|
+| `generator.py` | **AST → SQL string** | ~4000-line visitor. For each Expression type, has a `generate_*` method that emits SQL text. Handles indentation, quoting, operator precedence, and dialect-specific syntax. |
+| `transforms.py` | **Rewrite helpers** | Utility functions for common AST transformations used by both the optimizer and generators. |
+| `dialects/` | **Dialect plugins** | Each dialect (MySQL, Postgres, BigQuery, DuckDB, etc.) subclasses [Tokenizer](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/legacy/tokenizer.py#107-244), [Parser](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/parser_engine.py#12-76), and `Generator` to override dialect-specific behavior. |
+
+### Schema
+
+| File | Role | What it does |
+|---|---|---|
+| [schema.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo_new/MongoCon/schema.py) | **Schema interface** | `MappingSchema` class. Accepts `{table: {col: type}}` dicts. Used by `qualify` and `annotate_types` to resolve names and infer types. **Schema is data, not code.** |
+
+---
+
+## Side-by-Side Comparison
+
+| Role | Lucene file | SQLGlot file |
+|---|---|---|
+| **Orchestrator** | `QueryParserHelper.java` | [__init__.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/__init__.py) (`transpile()`) |
+| **Grammar / tokenizer** | `StandardSyntaxParser.jj` / `Token.java` | `tokens.py` / `tokenizer_core.py` |
+| **Parser** | `StandardSyntaxParser.java` (generated) | [parser.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/test_parser.py) (hand-written) |
+| **AST base class** | `QueryNode.java` / `QueryNodeImpl.java` | `expressions/` ([Expression](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo/parser/ast_nodes.py#79-85) base) |
+| **AST node types** | 22 files in `core/nodes/` | ~200+ classes in `expressions/` |
+| **Processor chain** | `QueryNodeProcessorPipeline.java` | `optimizer/optimizer.py` |
+| **Name resolution** | `MultiFieldQueryNodeProcessor.java` | `optimizer/qualify.py` |
+| **Type annotation** | `PointQueryNodeProcessor.java` | `optimizer/annotate_types.py` |
+| **Boolean normalization** | `BooleanQuery2ModifierNodeProcessor.java` | `optimizer/normalize.py` |
+| **Validation** | `AllowLeadingWildcardProcessor.java` | (parse-time errors) |
+| **Dead node cleanup** | `RemoveDeletedQueryNodesProcessor.java` | `optimizer/eliminate_*.py` |
+| **Simplification** | `BooleanSingleChildOptimizationQueryNodeProcessor.java` | `optimizer/simplify.py` |
+| **Builder / generator** | `QueryTreeBuilder.java` + per-node builders | `generator.py` |
+| **Schema / config** | `QueryConfigHandler.java` | [schema.py](file:///c:/Users/Prashant/Documents/NLMongo_Project/nl_to_mongo_new/MongoCon/schema.py) |
+| **Dialect support** | N/A (Lucene has one "dialect") | `dialects/` (30+ SQL dialects) |
